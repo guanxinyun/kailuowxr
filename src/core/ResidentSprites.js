@@ -259,6 +259,15 @@ export class ResidentSprite {
     if (!map) return;
     const mapSize = map.length;
 
+    // 安全检查：如果居民当前位置在未探索区域，传送回已探索区域
+    const curTileX = Math.floor(this.gridX);
+    const curTileY = Math.floor(this.gridY);
+    if (!isWalkable(map, curTileX, curTileY)) {
+      this.initPosition(mapSize, map);
+      this.enterIdle(500);
+      return;
+    }
+
     // 动画帧更新
     this.frameTimer += dt;
     if (this.frameTimer > 200) {
@@ -323,7 +332,12 @@ export class ResidentSprite {
    * 选择新的目的地并寻路
    */
   pickNewDestination(map, mapSize) {
-    const buildings = gameState.state.buildings.filter(b => b.built);
+    const buildings = gameState.state.buildings.filter(b => {
+      if (!b.built) return false;
+      // 只选择已探索区域内的建筑
+      const tile = map[b.y] && map[b.y][b.x];
+      return tile && tile.explored;
+    });
     const myX = Math.floor(this.gridX);
     const myY = Math.floor(this.gridY);
 
@@ -402,6 +416,15 @@ export class ResidentSprite {
     if (!this.currentWaypoint) {
       // 到达目的地
       this.arriveAtDestination();
+      return;
+    }
+
+    // 检查当前路径点是否仍在已探索区域内
+    const wpX = this.currentWaypoint.x;
+    const wpY = this.currentWaypoint.y;
+    if (!isWalkable(map, wpX, wpY)) {
+      // 路径点不可达（可能进入了迷雾），停下来重新寻路
+      this.enterIdle(500 + Math.random() * 1000);
       return;
     }
 

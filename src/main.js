@@ -156,6 +156,33 @@ function gameTick() {
   const seasonFoodMult = season.effect?.food || 1;
   const seasonEnergyMult = season.effect?.energy || 1;
 
+  // ===== 居民技能加成计算 =====
+  const residents = gameState.state.residents;
+  let avgEngineering = 0, avgResearch = 0, avgFarming = 0;
+  let avgCombat = 0, avgSocial = 0, avgSurvival = 0;
+  if (residents.length > 0) {
+    for (const r of residents) {
+      avgEngineering += (r.skills?.engineering || 1);
+      avgResearch    += (r.skills?.research || 1);
+      avgFarming     += (r.skills?.farming || 1);
+      avgCombat      += (r.skills?.combat || 1);
+      avgSocial      += (r.skills?.social || 1);
+      avgSurvival    += (r.skills?.survival || 1);
+    }
+    avgEngineering /= residents.length;
+    avgResearch    /= residents.length;
+    avgFarming     /= residents.length;
+    avgCombat      /= residents.length;
+    avgSocial      /= residents.length;
+    avgSurvival    /= residents.length;
+  }
+  // 技能加成：基础值1.0，每点技能+5%（技能范围1-10）
+  const skillBuildBonus    = 1 + (avgEngineering - 1) * 0.05; // 工程技能加速建造
+  const skillFarmBonus     = 1 + (avgFarming - 1) * 0.05;     // 农业技能加速食物产出
+  const skillResearchBonus = 1 + (avgResearch - 1) * 0.05;    // 研究技能加速科研
+  const skillDefenseBonus  = 1 + (avgCombat - 1) * 0.05;      // 战斗技能加强防御
+  const skillHappyBonus    = 1 + (avgSocial - 1) * 0.03;      // 社交技能提升幸福度
+
   // 全局效率加成
   const globalEff = gameState.state.globalEfficiency || 0;
   const farmBonus = gameState.state.farmBonus || 1;
@@ -173,8 +200,9 @@ function gameTick() {
   for (const building of gameState.state.buildings) {
     if (!building.built) {
       // Construction progress (buildTime=2 → 20天建好，速度1约40秒)
+      // 工程技能加速建造
       const data = getBuildingById(building.buildingId);
-      building.progress += (1 / (data.buildTime * 10)) * buildBonus;
+      building.progress += (1 / (data.buildTime * 10)) * buildBonus * skillBuildBonus;
       if (building.progress >= 1) {
         building.built = true;
         building.progress = 1;
@@ -199,17 +227,17 @@ function gameTick() {
     const eff = 1 + globalEff;
     const prodRate = 0.15; // 基础产出倍率
 
-    // 食物生产（受季节和农场加成影响）
+    // 食物生产（受季节、农场加成和农业技能影响）
     if (data.effect.food) {
-      gameState.addResource('food', data.effect.food * prodRate * seasonFoodMult * farmBonus * eff);
+      gameState.addResource('food', data.effect.food * prodRate * seasonFoodMult * farmBonus * skillFarmBonus * eff);
     }
     // 能源生产（受季节影响）
     if (data.effect.energy) {
       gameState.addResource('energy', data.effect.energy * prodRate * seasonEnergyMult * eff);
     }
-    // 研究点生产（受研究加成影响）
+    // 研究点生产（受研究加成和研究技能影响）
     if (data.effect.research) {
-      gameState.addResource('research', data.effect.research * prodRate * researchBonus * eff);
+      gameState.addResource('research', data.effect.research * prodRate * researchBonus * skillResearchBonus * eff);
     }
     // 氧气
     if (data.effect.oxygen) {
@@ -251,8 +279,8 @@ function gameTick() {
     gameState.addResource('credits', totalIncome);
   }
 
-  // 幸福度变化（建筑加成 - 消耗 - 季节影响）
-  const happinessDelta = totalHappiness - 0.1 + (season.effect?.comfort || 0) * 0.01;
+  // 幸福度变化（建筑加成 - 消耗 - 季节影响 + 社交技能加成）
+  const happinessDelta = totalHappiness * skillHappyBonus - 0.1 + (season.effect?.comfort || 0) * 0.01;
   const newHappiness = Math.max(0, Math.min(100, gameState.state.happiness + happinessDelta));
   if (Math.abs(newHappiness - gameState.state.happiness) > 0.5) {
     gameState.set('happiness', Math.round(newHappiness));
@@ -286,7 +314,7 @@ function gameTick() {
     let researchRate = 0;
     for (const lb of labBuildings) {
       const d = getBuildingById(lb.buildingId);
-      researchRate += d.effect.research * 0.002 * researchBonus;
+      researchRate += d.effect.research * 0.002 * researchBonus * skillResearchBonus;
     }
     cr.progress += researchRate;
     if (cr.progress >= 1) {

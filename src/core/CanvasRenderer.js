@@ -693,6 +693,25 @@ export class CanvasRenderer {
     // 悬停高亮
     if (this.hoveredTile) {
       const tile = this.hoveredTile;
+
+      // 未探索的地块不显示任何信息
+      if (!tile.explored) {
+        // 只显示迷雾中的问号提示
+        const iso = gridToIso(tile.x, tile.y, TILE_W, TILE_H);
+        ctx.fillStyle = 'rgba(255,255,255,0.06)';
+        ctx.beginPath();
+        ctx.moveTo(iso.x, iso.y);
+        ctx.lineTo(iso.x + TILE_W / 2, iso.y + TILE_H / 2);
+        ctx.lineTo(iso.x, iso.y + TILE_H);
+        ctx.lineTo(iso.x - TILE_W / 2, iso.y + TILE_H / 2);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.font = '10px "Noto Sans SC"';
+        ctx.textAlign = 'center';
+        ctx.fillText('未探索区域', iso.x, iso.y - 8);
+      } else {
       const iso = gridToIso(tile.x, tile.y, TILE_W, TILE_H);
 
       ctx.beginPath();
@@ -725,6 +744,7 @@ export class CanvasRenderer {
       ctx.shadowBlur = 3;
       ctx.fillText(`${tileInfo.name} (${tile.x}, ${tile.y})`, iso.x, iso.y - 8);
       ctx.shadowBlur = 0;
+      } // end explored tile hover
     }
 
     ctx.restore();

@@ -4,6 +4,7 @@
  */
 import { bus } from './EventBus.js';
 import { $, lucideIcon } from './utils.js';
+import { gameState } from './GameState.js';
 
 // 教程步骤定义
 const TUTORIAL_STEPS = [
@@ -83,6 +84,10 @@ export class TutorialManager {
     this.active = true;
     this.currentStep = 0;
 
+    // 暂停游戏时间，保存当前速度
+    this._savedSpeed = gameState.state.speed || 1;
+    gameState.set('speed', 0);
+
     // 创建教程覆盖层
     this.overlay = document.createElement('div');
     this.overlay.className = 'tutorial-overlay active';
@@ -156,6 +161,9 @@ export class TutorialManager {
     this._clearHighlight();
     this._clearDialog();
     this._clearEventListener();
+
+    // 恢复游戏速度
+    gameState.set('speed', this._savedSpeed || 1);
 
     if (this.overlay) {
       this.overlay.classList.remove('active');
