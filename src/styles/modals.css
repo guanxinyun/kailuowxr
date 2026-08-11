@@ -67,12 +67,14 @@
 }
 
 .modal-body {
-  flex: 1;
+  flex: 1 1 0;
   overflow-y: auto;
   overflow-x: hidden;
   padding: var(--sp-4) var(--sp-6);
   min-height: 0; /* fix flex overflow */
+  max-height: calc(90vh - 120px); /* 减去header+footer的大致高度 */
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain; /* 防止滚动穿透到背景 */
 }
 
 /* 技术树容器允许横向滚动 */

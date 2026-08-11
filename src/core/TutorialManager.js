@@ -111,6 +111,11 @@ export class TutorialManager {
     // 高亮元素
     if (step.highlight) {
       this._highlightElement(step.highlight);
+    } else if (this.overlay) {
+      // 没有高亮元素时，添加全屏半透明遮罩
+      const fullscreen = document.createElement('div');
+      fullscreen.className = 'tutorial-spotlight fullscreen';
+      this.overlay.appendChild(fullscreen);
     }
 
     // 如果需要等待事件，让overlay允许点击穿透到底层UI
@@ -300,6 +305,8 @@ export class TutorialManager {
     if (this.overlay) {
       this.overlay.appendChild(dialog);
     }
+    // 确保对话框在overlay pointer-events:none时仍可点击
+    dialog.style.pointerEvents = 'auto';
     this.dialog = dialog;
   }
 
@@ -325,6 +332,7 @@ export class TutorialManager {
       this._highlightedEl = null;
     }
     if (this.overlay) {
+      // 清除所有 spotlight（包括 fullscreen 遮罩）
       const spotlights = this.overlay.querySelectorAll('.tutorial-spotlight');
       spotlights.forEach(s => s.remove());
     }
