@@ -227,6 +227,14 @@ function gameTick() {
     const eff = 1 + globalEff;
     const prodRate = 0.15; // 基础产出倍率
 
+    // 金属生产（受工程技能影响）
+    if (data.effect.metal) {
+      gameState.addResource('metal', data.effect.metal * prodRate * skillBuildBonus * eff);
+    }
+    // 晶体生产（受工程技能影响）
+    if (data.effect.crystal) {
+      gameState.addResource('crystal', data.effect.crystal * prodRate * skillBuildBonus * eff);
+    }
     // 食物生产（受季节、农场加成和农业技能影响）
     if (data.effect.food) {
       gameState.addResource('food', data.effect.food * prodRate * seasonFoodMult * farmBonus * skillFarmBonus * eff);
@@ -260,6 +268,28 @@ function gameTick() {
     if (data.effect.storageBonus) storageBonus += data.effect.storageBonus;
     if (data.effect.globalEfficiency) {
       // AI核心等全局效率已在初始化时处理，这里跳过
+    }
+  }
+
+  // 地图资源地块被动产出（已探索的矿脉/晶矿地块每天少量产出）
+  if (gameState.state.day % 3 === 0) { // 每3天结算一次
+    const map = gameState.state.map;
+    if (map) {
+      let metalTiles = 0, crystalTiles = 0;
+      for (let y = 0; y < map.length; y++) {
+        for (let x = 0; x < map[0].length; x++) {
+          const tile = map[y][x];
+          if (!tile.explored) continue;
+          if (tile.type === 'metal') metalTiles++;
+          if (tile.type === 'crystal') crystalTiles++;
+        }
+      }
+      if (metalTiles > 0) {
+        gameState.addResource('metal', metalTiles * 0.3 * skillBuildBonus);
+      }
+      if (crystalTiles > 0) {
+        gameState.addResource('crystal', crystalTiles * 0.15 * skillBuildBonus);
+      }
     }
   }
 
@@ -442,8 +472,15 @@ function setupTopBar() {
     const res = RESOURCES[key];
     const badge = document.createElement('div');
     badge.className = 'resource-badge';
+    badge.title = res.name; // 鼠标悬停显示资源名称
     badge.innerHTML = '';
     badge.appendChild(lucideIcon(res.icon, 14));
+    // 添加资源名称标签
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'resource-name';
+    nameSpan.textContent = res.name;
+    nameSpan.style.cssText = 'font-size:10px;opacity:0.7;margin-right:2px;';
+    badge.appendChild(nameSpan);
     const val = document.createElement('span');
     val.className = 'resource-value';
     val.dataset.resource = key;

@@ -4,7 +4,7 @@
 import { gameState } from '../core/GameState.js';
 import { ui } from '../core/UIManager.js';
 import { createElement, lucideIcon, formatNumber } from '../core/utils.js';
-import { EXPLORE_REGIONS } from '../data/gamedata.js';
+import { RESOURCES, EXPLORE_REGIONS } from '../data/gamedata.js';
 import { bus } from '../core/EventBus.js';
 import { TutorialManager } from '../core/TutorialManager.js';
 
@@ -106,8 +106,13 @@ export function openStatsPanel() {
   const resGrid = createElement('div', { className: 'stats-grid' });
   for (const [key, val] of Object.entries(s.resources)) {
     const max = s.storage[key];
+    const resInfo = RESOURCES[key];
+    const resName = resInfo ? resInfo.name : key;
     resGrid.appendChild(createElement('div', { className: 'stat-card' }, [
-      createElement('div', { className: 'stat-card-label' }, [key]),
+      createElement('div', { className: 'stat-card-label' }, [
+        resInfo ? lucideIcon(resInfo.icon, 12) : null,
+        document.createTextNode(' ' + resName),
+      ].filter(Boolean)),
       createElement('div', { className: 'stat-card-value' }, [formatNumber(val)]),
       max !== Infinity ? createElement('div', { className: 'progress-bar', style: { marginTop: '4px' } }, [
         createElement('div', { className: 'progress-fill', style: { width: `${(val / max) * 100}%` } }),
