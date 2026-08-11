@@ -520,6 +520,26 @@ function setupBottomBar() {
   const icon = $('#bottom-icon');
   if (icon) icon.appendChild(lucideIcon('radio', 12));
 
+  // 教程按钮（底部栏右侧）
+  const bottomBar = $('#bottombar');
+  if (bottomBar) {
+    const tutBtn = document.createElement('button');
+    tutBtn.className = 'tool-btn';
+    tutBtn.style.cssText = 'position:absolute;right:12px;top:50%;transform:translateY(-50%);padding:4px 10px;font-size:11px;gap:4px;';
+    tutBtn.title = '新手教程';
+    tutBtn.appendChild(lucideIcon('book-open', 14));
+    const label = document.createElement('span');
+    label.textContent = '教程';
+    label.style.fontSize = '11px';
+    tutBtn.appendChild(label);
+    tutBtn.addEventListener('click', () => {
+      localStorage.removeItem('stardust_tutorial_done');
+      const tutorial = new TutorialManager();
+      tutorial.start();
+    });
+    bottomBar.appendChild(tutBtn);
+  }
+
   // Year review listener
   bus.on('year:review', () => {
     openAnnualPanel();

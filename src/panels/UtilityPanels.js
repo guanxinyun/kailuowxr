@@ -6,6 +6,7 @@ import { ui } from '../core/UIManager.js';
 import { createElement, lucideIcon, formatNumber } from '../core/utils.js';
 import { EXPLORE_REGIONS } from '../data/gamedata.js';
 import { bus } from '../core/EventBus.js';
+import { TutorialManager } from '../core/TutorialManager.js';
 
 // ===== 探索面板 =====
 export function openExplorePanel() {
@@ -135,6 +136,22 @@ export function openSettingsPanel() {
   gameSection.appendChild(createSettingRow('自动保存', createToggle(true)));
   gameSection.appendChild(createSettingRow('显示教程提示', createToggle(true)));
   gameSection.appendChild(createSettingRow('显示网格线', createToggle(true)));
+
+  // 重新开始教程按钮
+  const tutorialBtn = createElement('button', { className: 'btn btn-primary', style: { marginTop: '8px' } }, [
+    lucideIcon('book-open', 14),
+    document.createTextNode(' 重新开始教程'),
+  ]);
+  tutorialBtn.addEventListener('click', () => {
+    localStorage.removeItem('stardust_tutorial_done');
+    ui.closeModal();
+    setTimeout(() => {
+      const tutorial = new TutorialManager();
+      tutorial.start();
+    }, 300);
+  });
+  gameSection.appendChild(tutorialBtn);
+
   container.appendChild(gameSection);
 
   // Display settings
