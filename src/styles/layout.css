@@ -1,0 +1,198 @@
+/* ============================================
+   星尘殖民地 — 主布局
+   ============================================ */
+
+.game-layout {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  display: grid;
+  grid-template-rows: var(--topbar-height) 1fr var(--bottombar-height);
+  grid-template-columns: var(--toolpanel-width) 1fr;
+  grid-template-areas:
+    "topbar   topbar"
+    "toolpanel main"
+    "bottombar bottombar";
+  overflow: hidden;
+  background: var(--bg-deep);
+}
+
+/* ---- 星空背景 ---- */
+.game-layout::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(30,40,80,0.4) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(60,30,80,0.3) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 80%, rgba(20,50,80,0.3) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+/* ---- 顶部状态栏 ---- */
+.top-bar {
+  grid-area: topbar;
+  z-index: var(--z-ui);
+  position: relative;
+}
+.top-bar::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(160,180,255,0.15), transparent);
+}
+
+/* ---- 左侧工具栏 ---- */
+.tool-panel {
+  grid-area: toolpanel;
+  z-index: var(--z-panel);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--sp-3) 0;
+  gap: var(--sp-1);
+  background: var(--bg-panel);
+  backdrop-filter: blur(16px);
+  border-right: 1px solid var(--border-subtle);
+  position: relative;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.tool-panel::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  width: 1px;
+  background: linear-gradient(180deg, transparent, rgba(160,180,255,0.1), transparent);
+}
+
+.tool-buttons {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+/* ---- 主游戏区域 / Canvas 容器 ---- */
+.canvas-container {
+  grid-area: main;
+  position: relative;
+  z-index: var(--z-canvas);
+  overflow: hidden;
+  background: var(--bg-deep);
+}
+.canvas-container canvas {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+#canvas-terrain { z-index: 1; }
+#canvas-dynamic { z-index: 2; }
+#canvas-heatmap { z-index: 3; opacity: 0.6; pointer-events: none; }
+
+/* ---- 右侧面板 ---- */
+.side-panel {
+  position: fixed;
+  top: var(--topbar-height);
+  right: 0;
+  bottom: var(--bottombar-height);
+  width: var(--sidepanel-width);
+  z-index: var(--z-panel);
+  background: var(--bg-panel);
+  backdrop-filter: blur(16px);
+  border-left: 1px solid var(--border-subtle);
+  transform: translateX(100%);
+  transition: transform var(--transition-slow);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.side-panel.active {
+  transform: translateX(0);
+}
+.side-panel::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(160,180,255,0.2), transparent);
+}
+
+/* ---- 底部通知栏 ---- */
+.bottom-bar {
+  grid-area: bottombar;
+  z-index: var(--z-ui);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--sp-4);
+  gap: var(--sp-3);
+  background: var(--bg-panel);
+  backdrop-filter: blur(16px);
+  border-top: 1px solid var(--border-subtle);
+  overflow: hidden;
+  position: relative;
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+.bottom-bar::before {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(160,180,255,0.1), transparent);
+}
+.bottom-icon {
+  display: flex;
+  align-items: center;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.bottom-icon svg {
+  width: 12px; height: 12px;
+}
+.bottom-message {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- 模态框叠加层 ---- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(6px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity var(--transition-normal);
+  overflow-y: auto;
+  padding: var(--sp-4);
+}
+.modal-overlay.active {
+  display: flex;
+  opacity: 1;
+}
+
+/* ---- 通知容器 ---- */
+.notification-container {
+  position: fixed;
+  top: calc(var(--topbar-height) + var(--sp-4));
+  right: var(--sp-4);
+  z-index: var(--z-notification);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  pointer-events: none;
+  max-width: 360px;
+}
+.notification-container > * {
+  pointer-events: auto;
+}

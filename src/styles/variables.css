@@ -1,0 +1,115 @@
+/* ============================================
+   星尘殖民地 — CSS 自定义属性体系
+   ============================================ */
+
+:root {
+  /* ---- 六维引力色 ---- */
+  --color-food:      #FF8C42;
+  --color-knowledge: #4A90D9;
+  --color-comfort:   #A8D8B9;
+  --color-adventure: #E74C3C;
+  --color-culture:   #9B59B6;
+  --color-nature:    #2ECC71;
+
+  --color-food-dim:      rgba(255,140,66,0.25);
+  --color-knowledge-dim: rgba(74,144,217,0.25);
+  --color-comfort-dim:   rgba(168,216,185,0.25);
+  --color-adventure-dim: rgba(231,76,60,0.25);
+  --color-culture-dim:   rgba(155,89,182,0.25);
+  --color-nature-dim:    rgba(46,204,113,0.25);
+
+  /* ---- 背景 ---- */
+  --bg-deep:       #0A0C1C;
+  --bg-space:      #0E1029;
+  --bg-panel:      rgba(15, 18, 35, 0.88);
+  --bg-card:       rgba(25, 30, 55, 0.92);
+  --bg-card-hover: rgba(35, 42, 75, 0.95);
+  --bg-input:      rgba(10, 14, 30, 0.7);
+  --bg-overlay:    rgba(0, 0, 0, 0.6);
+
+  /* ---- 文字 ---- */
+  --text-primary:   #E8E6F0;
+  --text-secondary: #8B8AA0;
+  --text-accent:    #A8C4FF;
+  --text-dim:       #5A5870;
+  --text-bright:    #FFFFFF;
+
+  /* ---- 边框与发光 ---- */
+  --border-glow:    rgba(100, 140, 255, 0.3);
+  --border-subtle:  rgba(80, 90, 140, 0.2);
+  --border-active:  rgba(120, 160, 255, 0.6);
+  --glow-blue:      0 0 12px rgba(100, 140, 255, 0.4);
+  --glow-gold:      0 0 12px rgba(255, 200, 60, 0.4);
+
+  /* ---- 状态色 ---- */
+  --color-success:  #2ECC71;
+  --color-warning:  #F39C12;
+  --color-danger:   #E74C3C;
+  --color-info:     #4A90D9;
+
+  /* ---- 间距 ---- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+
+  /* ---- 圆角 ---- */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* ---- 阴影 ---- */
+  --shadow-sm:   0 2px 4px rgba(0,0,0,0.3);
+  --shadow-md:   0 4px 12px rgba(0,0,0,0.4);
+  --shadow-lg:   0 8px 24px rgba(0,0,0,0.5);
+  --shadow-glow: 0 0 20px rgba(100,140,255,0.15);
+  --shadow-card-hover: 0 8px 32px rgba(100,140,255,0.2);
+
+  /* ---- 字体 ---- */
+  --font-body: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+
+  /* ---- 字号 ---- */
+  --fs-xs:  11px;
+  --fs-sm:  12px;
+  --fs-md:  14px;
+  --fs-lg:  16px;
+  --fs-xl:  20px;
+  --fs-2xl: 24px;
+  --fs-3xl: 32px;
+  --fs-4xl: 48px;
+
+  /* ---- 字重 ---- */
+  --fw-light:  300;
+  --fw-normal: 400;
+  --fw-bold:   700;
+
+  /* ---- 过渡 ---- */
+  --transition-fast:   150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow:   400ms ease;
+  --transition-spring: 350ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ---- z-index 层级 ---- */
+  --z-canvas:       1;
+  --z-ui:          10;
+  --z-panel:       20;
+  --z-dropdown:    50;
+  --z-modal:      100;
+  --z-notification:200;
+  --z-tooltip:    300;
+
+  /* ---- 布局尺寸 ---- */
+  --topbar-height:    48px;
+  --toolpanel-width:  64px;
+  --sidepanel-width: 340px;
+  --bottombar-height: 36px;
+}

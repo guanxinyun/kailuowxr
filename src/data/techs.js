@@ -1,0 +1,210 @@
+/**
+ * 星尘殖民地 — 科技树数据
+ * 13 techs in a directed graph
+ */
+
+export const TECHS = [
+  {
+    id: 'biotech_1',
+    name: '基础生物工程',
+    tier: 1,
+    icon: 'dna',
+    desc: '掌握基因编辑技术，解锁高级食物生产。',
+    flavor: '改写生命的密码，从一粒种子开始。',
+    cost: { research: 30 },
+    prereqs: [],
+    unlocks: ['protein_vat', 'algae_reactor'],
+    gravity: { food: 2, knowledge: 1, nature: 1 },
+    position: { x: 100, y: 120 },
+  },
+  {
+    id: 'astronomy',
+    name: '深空天文学',
+    tier: 1,
+    icon: 'telescope',
+    desc: '系统化观测宇宙，发现新的星系和资源。',
+    flavor: '每一颗星星都是一个未解之谜。',
+    cost: { research: 25 },
+    prereqs: [],
+    unlocks: ['observatory'],
+    gravity: { knowledge: 3, adventure: 2 },
+    position: { x: 300, y: 60 },
+  },
+  {
+    id: 'shields',
+    name: '能量护盾',
+    tier: 1,
+    icon: 'shield',
+    desc: '利用电磁场产生防护屏障。',
+    flavor: '最好的盔甲是看不见的。',
+    cost: { research: 35 },
+    prereqs: [],
+    unlocks: ['shield_gen'],
+    gravity: { knowledge: 1, comfort: 2 },
+    position: { x: 500, y: 120 },
+  },
+  {
+    id: 'culture_1',
+    name: '殖民文化学',
+    tier: 1,
+    icon: 'book-open',
+    desc: '研究如何在异星环境中建立文化认同。',
+    flavor: '文化不是奢侈品，是生存必需品。',
+    cost: { research: 20 },
+    prereqs: [],
+    unlocks: ['museum'],
+    gravity: { culture: 3, comfort: 1 },
+    position: { x: 700, y: 60 },
+  },
+
+  // Tier 2
+  {
+    id: 'ecology',
+    name: '生态工程',
+    tier: 2,
+    icon: 'leaf',
+    desc: '在封闭环境中构建自维持生态系统。',
+    flavor: '一个小小的温室，就是一整个世界。',
+    cost: { research: 55 },
+    prereqs: ['biotech_1'],
+    unlocks: ['greenhouse'],
+    gravity: { nature: 4, food: 2, knowledge: 1 },
+    position: { x: 100, y: 240 },
+  },
+  {
+    id: 'xenobiology',
+    name: '异星生物学',
+    tier: 2,
+    icon: 'bug',
+    desc: '研究外星生命形态，获取独特生物资源。',
+    flavor: '生命总会找到出路——即使在最不可能的地方。',
+    cost: { research: 50 },
+    prereqs: ['biotech_1', 'astronomy'],
+    unlocks: ['xeno_lab'],
+    gravity: { knowledge: 3, adventure: 3, nature: 2 },
+    position: { x: 200, y: 240 },
+  },
+  {
+    id: 'sensors',
+    name: '高级传感器',
+    tier: 2,
+    icon: 'radar',
+    desc: '远距离探测和分析系统。',
+    flavor: '在寂静中听见一切。',
+    cost: { research: 40 },
+    prereqs: ['astronomy'],
+    unlocks: ['radar'],
+    gravity: { knowledge: 2, adventure: 3 },
+    position: { x: 400, y: 240 },
+  },
+  {
+    id: 'weapons_1',
+    name: '定向能武器',
+    tier: 2,
+    icon: 'zap',
+    desc: '开发激光和粒子束武器系统。',
+    flavor: '我们不寻求战争，但必须准备好面对它。',
+    cost: { research: 45 },
+    prereqs: ['shields'],
+    unlocks: ['turret'],
+    gravity: { adventure: 4, knowledge: 1 },
+    position: { x: 500, y: 240 },
+  },
+  {
+    id: 'culture_2',
+    name: '星际美学',
+    tier: 2,
+    icon: 'sparkles',
+    desc: '融合多元文明的艺术形式，创造独特的星际文化。',
+    flavor: '美，是所有智慧生命共通的语言。',
+    cost: { research: 50 },
+    prereqs: ['culture_1'],
+    unlocks: ['concert_hall', 'monument'],
+    gravity: { culture: 5, comfort: 2 },
+    position: { x: 700, y: 240 },
+  },
+
+  // Tier 3
+  {
+    id: 'quantum',
+    name: '量子信息学',
+    tier: 3,
+    icon: 'atom',
+    desc: '利用量子效应进行计算和通信。',
+    flavor: '在量子的世界里，不确定性就是确定性。',
+    cost: { research: 80 },
+    prereqs: ['sensors', 'xenobiology'],
+    unlocks: ['quantum_lab'],
+    gravity: { knowledge: 6, culture: 1 },
+    position: { x: 300, y: 360 },
+  },
+  {
+    id: 'diplomacy_1',
+    name: '星际外交',
+    tier: 3,
+    icon: 'handshake',
+    desc: '建立与外星文明的正式外交关系。',
+    flavor: '握手——或者触手——是和平的开始。',
+    cost: { research: 60 },
+    prereqs: ['culture_2', 'sensors'],
+    unlocks: ['trade_hub'],
+    gravity: { culture: 3, adventure: 3, knowledge: 2 },
+    position: { x: 550, y: 360 },
+  },
+  {
+    id: 'holography',
+    name: '全息投影',
+    tier: 3,
+    icon: 'monitor-play',
+    desc: '完美的三维光场再现技术。',
+    flavor: '当虚拟与现实的边界消失。',
+    cost: { research: 55 },
+    prereqs: ['culture_2'],
+    unlocks: ['holodeck'],
+    gravity: { culture: 4, comfort: 3, knowledge: 1 },
+    position: { x: 700, y: 360 },
+  },
+
+  // Tier 4
+  {
+    id: 'warp',
+    name: '曲率驱动',
+    tier: 4,
+    icon: 'orbit',
+    desc: '扭曲时空结构实现超光速旅行。',
+    flavor: '不是我们在移动，是宇宙在为我们让路。',
+    cost: { research: 120 },
+    prereqs: ['quantum', 'diplomacy_1'],
+    unlocks: ['warp_gate'],
+    gravity: { knowledge: 5, adventure: 8, culture: 3 },
+    position: { x: 400, y: 460 },
+  },
+  {
+    id: 'ai_tech',
+    name: '通用人工智能',
+    tier: 4,
+    icon: 'brain',
+    desc: '创造具有自主意识的AI系统。',
+    flavor: '我们创造了一个新的生命形式——然后它开始创造我们。',
+    cost: { research: 100 },
+    prereqs: ['quantum'],
+    unlocks: ['ai_core'],
+    gravity: { knowledge: 7, comfort: 2, culture: 2 },
+    position: { x: 200, y: 460 },
+  },
+];
+
+export function getTechById(id) {
+  return TECHS.find(t => t.id === id);
+}
+
+export function getTechsByTier(tier) {
+  return TECHS.filter(t => t.tier === tier);
+}
+
+export function getAvailableTechs(researchedIds) {
+  return TECHS.filter(t =>
+    !researchedIds.includes(t.id) &&
+    t.prereqs.every(p => researchedIds.includes(p))
+  );
+}

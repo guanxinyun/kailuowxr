@@ -1,0 +1,320 @@
+/* ============================================
+   星尘殖民地 — 教程系统样式
+   ============================================ */
+
+/* ---- 教程覆盖层 ---- */
+.tutorial-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--transition-normal);
+}
+.tutorial-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ---- 聚光灯高亮 ---- */
+.tutorial-spotlight {
+  position: fixed;
+  z-index: 401;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 0 0 9999px rgba(2, 4, 12, 0.78);
+  transition: all 400ms cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+.tutorial-spotlight::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 2px solid var(--text-accent);
+  border-radius: inherit;
+  animation: pulseBorder 2s infinite;
+}
+.tutorial-spotlight::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border: 1px solid rgba(100, 140, 255, 0.15);
+  border-radius: inherit;
+  animation: breathe 3s infinite;
+}
+
+/* 无聚光灯时的全屏遮罩 */
+.tutorial-spotlight.fullscreen {
+  position: fixed;
+  inset: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: rgba(2, 4, 12, 0.78);
+}
+.tutorial-spotlight.fullscreen::before,
+.tutorial-spotlight.fullscreen::after {
+  display: none;
+}
+
+/* 高亮目标元素提升层级 */
+.tutorial-highlight {
+  position: relative !important;
+  z-index: 402 !important;
+  pointer-events: auto !important;
+}
+
+/* ---- 对话框 ---- */
+.tutorial-dialog {
+  position: fixed;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 403;
+  width: 640px;
+  max-width: calc(100vw - 48px);
+  background: rgba(12, 16, 32, 0.94);
+  backdrop-filter: blur(24px);
+  border: 1px solid var(--border-glow);
+  border-radius: var(--radius-xl);
+  box-shadow:
+    var(--shadow-lg),
+    0 0 40px rgba(100, 140, 255, 0.08),
+    inset 0 1px 0 rgba(180, 200, 255, 0.08);
+  padding: 0;
+  overflow: hidden;
+  animation: tutorialDialogIn 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: auto;
+}
+.tutorial-dialog.exiting {
+  animation: tutorialDialogOut 250ms ease forwards;
+}
+
+@keyframes tutorialDialogIn {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(30px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+@keyframes tutorialDialogOut {
+  0% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(20px) scale(0.97);
+  }
+}
+
+/* 顶部装饰线 */
+.tutorial-dialog::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(160, 200, 255, 0.3), transparent);
+}
+
+/* ---- 对话框头部 ---- */
+.tutorial-dialog-header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5);
+  border-bottom: 1px solid rgba(100, 140, 255, 0.1);
+}
+
+.tutorial-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, rgba(74, 144, 217, 0.2), rgba(100, 140, 255, 0.1));
+  border: 2px solid var(--border-glow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  animation: breathe 4s infinite;
+}
+.tutorial-avatar svg {
+  width: 22px;
+  height: 22px;
+  color: var(--text-accent);
+  stroke-width: 1.5;
+}
+
+.tutorial-speaker {
+  flex: 1;
+}
+.tutorial-speaker-name {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-bold);
+  color: var(--text-accent);
+}
+.tutorial-speaker-title {
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+}
+
+.tutorial-step-badge {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+  padding: 2px var(--sp-2);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: var(--radius-sm);
+}
+
+/* ---- 对话内容 ---- */
+.tutorial-dialog-body {
+  padding: var(--sp-5);
+  min-height: 60px;
+}
+
+.tutorial-text {
+  font-size: var(--fs-lg);
+  line-height: 1.8;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+}
+
+/* 打字机光标 */
+.tutorial-text .cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  background: var(--text-accent);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: cursorBlink 800ms step-end infinite;
+}
+.tutorial-text .cursor.hidden {
+  opacity: 0;
+}
+
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* ---- 对话框底部 ---- */
+.tutorial-dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-3) var(--sp-5);
+  border-top: 1px solid rgba(100, 140, 255, 0.1);
+  background: rgba(0, 0, 0, 0.15);
+}
+
+/* 步骤指示器 */
+.tutorial-progress {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tutorial-progress-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  transition: all var(--transition-normal);
+}
+.tutorial-progress-dot.completed {
+  background: var(--text-accent);
+  opacity: 0.5;
+}
+.tutorial-progress-dot.current {
+  background: var(--text-accent);
+  width: 18px;
+  border-radius: 3px;
+  box-shadow: 0 0 6px rgba(100, 140, 255, 0.4);
+}
+
+/* 按钮组 */
+.tutorial-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.tutorial-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-4);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+.tutorial-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--border-glow);
+}
+.tutorial-btn svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.5;
+}
+
+.tutorial-btn-primary {
+  color: var(--text-accent);
+  background: linear-gradient(135deg, rgba(74, 144, 217, 0.2), rgba(100, 140, 255, 0.1));
+  border-color: rgba(100, 140, 255, 0.4);
+}
+.tutorial-btn-primary:hover {
+  background: linear-gradient(135deg, rgba(74, 144, 217, 0.35), rgba(100, 140, 255, 0.2));
+  border-color: rgba(100, 140, 255, 0.6);
+  box-shadow: 0 0 12px rgba(100, 140, 255, 0.2);
+}
+
+.tutorial-btn-skip {
+  color: var(--text-dim);
+  background: transparent;
+  border-color: transparent;
+  font-size: var(--fs-xs);
+}
+.tutorial-btn-skip:hover {
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* 等待操作提示 */
+.tutorial-hint {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  margin-top: var(--sp-3);
+  background: rgba(100, 140, 255, 0.06);
+  border: 1px solid rgba(100, 140, 255, 0.15);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-sm);
+  color: var(--text-accent);
+}
+.tutorial-hint svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  animation: pulse 2s infinite;
+}
+
+/* ---- 响应式 ---- */
+@media (max-width: 768px) {
+  .tutorial-dialog {
+    width: calc(100vw - 24px);
+    bottom: 44px;
+  }
+  .tutorial-text {
+    font-size: var(--fs-md);
+  }
+}

@@ -1,0 +1,586 @@
+/* ============================================
+   星尘殖民地 — 外交面板 + 居民面板 + 年终评比
+   ============================================ */
+
+/* ======== 外交面板 ======== */
+.diplomacy-panel .modal-body {
+  padding: var(--sp-4) var(--sp-6);
+}
+
+.species-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+}
+
+.species-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: border-color var(--transition-normal);
+}
+.species-card:hover {
+  border-color: var(--border-glow);
+}
+
+.species-card-header {
+  padding: var(--sp-4) var(--sp-5);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  position: relative;
+}
+.species-card-header::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+.species-card.squid .species-card-header::after    { background: linear-gradient(90deg, #FF7B9C, transparent); }
+.species-card.crystal .species-card-header::after  { background: linear-gradient(90deg, #C8BFE7, transparent); }
+.species-card.mecha .species-card-header::after    { background: linear-gradient(90deg, #7F8C8D, transparent); }
+.species-card.flora .species-card-header::after    { background: linear-gradient(90deg, #A8D8B9, transparent); }
+
+.species-avatar {
+  width: 56px; height: 56px;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 28px;
+  border: 2px solid;
+}
+.species-card.squid .species-avatar   { background: rgba(255,123,156,0.15); border-color: rgba(255,123,156,0.4); }
+.species-card.crystal .species-avatar { background: rgba(200,191,231,0.15); border-color: rgba(200,191,231,0.4); }
+.species-card.mecha .species-avatar   { background: rgba(127,140,141,0.15); border-color: rgba(127,140,141,0.4); }
+.species-card.flora .species-avatar   { background: rgba(168,216,185,0.15); border-color: rgba(168,216,185,0.4); }
+
+.species-avatar svg {
+  width: 28px; height: 28px;
+  stroke-width: 1.5;
+}
+
+.species-info h3 {
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-bold);
+}
+.species-homeworld {
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+}
+
+.species-card-body {
+  padding: 0 var(--sp-5) var(--sp-5);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-4);
+}
+
+.species-lore {
+  grid-column: 1 / -1;
+}
+.species-lore p {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  line-height: 1.7;
+  margin-bottom: var(--sp-2);
+}
+.species-lore .lore-label {
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+  margin-bottom: 2px;
+}
+
+.species-radar-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.species-radar-section h4 {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--sp-2);
+}
+
+/* ---- 好感度进度条 ---- */
+.reputation-section {
+  grid-column: 1 / -1;
+}
+.reputation-bar-container {
+  position: relative;
+  margin: var(--sp-3) 0;
+}
+.reputation-bar {
+  width: 100%;
+  height: 12px;
+  background: rgba(255,255,255,0.06);
+  border-radius: var(--radius-full);
+  overflow: visible;
+  position: relative;
+}
+.reputation-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: linear-gradient(90deg, #3a6090, #6090d0);
+  transition: width var(--transition-slow);
+  position: relative;
+}
+.reputation-markers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.reputation-marker {
+  position: absolute;
+  top: -4px; bottom: -4px;
+  width: 2px;
+  background: var(--text-dim);
+  border-radius: 1px;
+}
+.reputation-marker.reached {
+  background: var(--color-success);
+  animation: pulseGlow 2s infinite;
+}
+.reputation-marker-label {
+  position: absolute;
+  top: calc(100% + 6px);
+  transform: translateX(-50%);
+  font-size: 9px;
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+/* ---- 奖励预览 ---- */
+.tier-rewards {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp-3);
+}
+.tier-reward-card {
+  padding: var(--sp-3);
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  text-align: center;
+  font-size: var(--fs-xs);
+  transition: all var(--transition-fast);
+}
+.tier-reward-card.unlocked {
+  border-color: rgba(46,204,113,0.4);
+  background: rgba(46,204,113,0.05);
+}
+.tier-reward-card.locked {
+  opacity: 0.5;
+}
+.tier-reward-level {
+  font-family: var(--font-mono);
+  font-weight: var(--fw-bold);
+  font-size: var(--fs-sm);
+  margin-bottom: var(--sp-1);
+}
+.tier-reward-desc {
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* ---- 冷知识 ---- */
+.species-funfact {
+  grid-column: 1 / -1;
+  padding: var(--sp-3) var(--sp-4);
+  background: rgba(100,140,255,0.05);
+  border: 1px solid rgba(100,140,255,0.15);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-sm);
+  color: var(--text-accent);
+  font-style: italic;
+  line-height: 1.6;
+}
+
+/* ======== 居民面板 ======== */
+.resident-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.resident-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: border-color var(--transition-normal);
+}
+.resident-card:hover {
+  border-color: var(--border-glow);
+}
+
+.resident-header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  cursor: pointer;
+}
+.resident-avatar {
+  width: 44px; height: 44px;
+  border-radius: var(--radius-lg);
+  background: rgba(100,140,255,0.1);
+  border: 2px solid var(--border-glow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.resident-avatar svg {
+  width: 22px; height: 22px;
+  stroke-width: 1.5;
+}
+.resident-name-section {
+  flex: 1;
+}
+.resident-name {
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-bold);
+}
+.resident-title {
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+}
+.resident-level {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--text-accent);
+  padding: 2px var(--sp-2);
+  background: rgba(100,140,255,0.1);
+  border-radius: var(--radius-sm);
+}
+
+.resident-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  padding: 0 var(--sp-4) var(--sp-3);
+}
+
+.resident-detail {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height var(--transition-slow);
+}
+.resident-card.expanded .resident-detail {
+  max-height: 600px;
+}
+.resident-detail-inner {
+  padding: 0 var(--sp-4) var(--sp-4);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-4);
+}
+
+.resident-stats {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.resident-stats h4 {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--sp-1);
+}
+
+.resident-mood {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  background: rgba(255,255,255,0.03);
+  border-radius: var(--radius-md);
+}
+.mood-label {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+.mood-value {
+  font-family: var(--font-mono);
+  font-weight: var(--fw-bold);
+}
+.mood-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.mood-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width var(--transition-normal), background var(--transition-normal);
+}
+
+.resident-diary {
+  grid-column: 1 / -1;
+  padding: var(--sp-3) var(--sp-4);
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  min-height: 80px;
+}
+.resident-diary h4 {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--sp-2);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.resident-diary h4 svg {
+  width: 14px; height: 14px;
+}
+
+/* ======== 年终评比 ======== */
+.annual-panel .modal-body {
+  padding: var(--sp-6);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-6);
+}
+
+.annual-header {
+  text-align: center;
+}
+.annual-year {
+  font-size: var(--fs-3xl);
+  font-weight: var(--fw-bold);
+  color: var(--text-accent);
+}
+.annual-subtitle {
+  font-size: var(--fs-md);
+  color: var(--text-secondary);
+}
+
+.annual-rank {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-8);
+  background: var(--bg-card);
+  border: 1px solid var(--border-glow);
+  border-radius: var(--radius-xl);
+  animation: rankUp 600ms ease;
+}
+.annual-rank-label {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+.annual-rank-number {
+  font-family: var(--font-mono);
+  font-size: var(--fs-4xl);
+  font-weight: var(--fw-bold);
+  color: var(--text-accent);
+  line-height: 1;
+}
+.annual-rank-change {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-bold);
+}
+.annual-rank-change.up { color: var(--color-success); }
+.annual-rank-change.down { color: var(--color-danger); }
+.annual-rank-change svg {
+  width: 20px; height: 20px;
+}
+
+.annual-grade {
+  font-size: var(--fs-3xl);
+  font-weight: var(--fw-bold);
+  padding: var(--sp-2) var(--sp-6);
+  border: 2px solid var(--border-glow);
+  border-radius: var(--radius-lg);
+  font-family: var(--font-mono);
+}
+
+.annual-radar-container {
+  width: 300px;
+  height: 300px;
+}
+
+.annual-scores {
+  width: 100%;
+  max-width: 600px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.annual-score-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.annual-score-dim {
+  width: 48px;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-bold);
+}
+.annual-score-dim .dim-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.annual-score-bar {
+  flex: 1;
+}
+.annual-score-value {
+  font-family: var(--font-mono);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-bold);
+  min-width: 32px;
+  text-align: right;
+}
+.annual-score-comment {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  min-width: 100px;
+}
+
+.annual-commentary {
+  width: 100%;
+  max-width: 600px;
+  padding: var(--sp-4) var(--sp-5);
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  font-size: var(--fs-md);
+  line-height: 1.8;
+  color: var(--text-secondary);
+  min-height: 100px;
+}
+
+.annual-awards {
+  display: flex;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.annual-award {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4);
+  background: rgba(255,200,60,0.06);
+  border: 1px solid rgba(255,200,60,0.2);
+  border-radius: var(--radius-full);
+  font-size: var(--fs-sm);
+}
+.annual-award svg {
+  width: 16px; height: 16px;
+  color: #F0C040;
+}
+
+/* ======== 探索/统计/设置 ======== */
+.explore-regions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.region-card {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.region-card:hover {
+  border-color: var(--border-glow);
+  transform: translateX(4px);
+}
+.region-danger {
+  display: flex;
+  gap: 2px;
+}
+.region-danger-pip {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--text-dim);
+}
+.region-danger-pip.active {
+  background: var(--color-adventure);
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-4);
+}
+.stat-card {
+  padding: var(--sp-4);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+.stat-card-label {
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  margin-bottom: var(--sp-1);
+}
+.stat-card-value {
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-bold);
+}
+
+.settings-section {
+  margin-bottom: var(--sp-6);
+}
+.settings-section h3 {
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-bold);
+  margin-bottom: var(--sp-3);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-2) 0;
+}
+.settings-label {
+  font-size: var(--fs-md);
+}
+.settings-input {
+  width: 200px;
+}
+
+/* ---- 响应式 ---- */
+@media (max-width: 1200px) {
+  :root {
+    --sidepanel-width: 300px;
+  }
+  .species-card-body {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 1024px) {
+  :root {
+    --toolpanel-width: 52px;
+  }
+  .tool-btn { width: 38px; height: 38px; }
+  .tool-btn svg { width: 18px; height: 18px; }
+  .gravity-toggle { width: 22px; height: 22px; }
+}

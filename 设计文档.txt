@@ -1,0 +1,2359 @@
+```
+当前模型 claude-opus-4-6-thinking 不支持图像输入，正在使用 OCR 处理图像
+# 《星尘殖民地》最终合并版 —— 完整前端系统设计文档
+
+## 为 Claude Code 生成的统一蓝图
+
+---
+
+# 第一部分：全局架构
+
+---
+
+## 1.1 技术栈
+
+| 层级 | 技术 | 说明 |
+|------|------|------|
+| 渲染 | HTML5 Canvas 2D（或 PixiJS） | 像素风不需要 WebGL |
+| UI框架 | 原生 DOM + CSS | 菜单、面板、弹窗叠在 Canvas 上层 |
+| 状态管理 | 单一 GameState 对象 + EventEmitter 事件总线 | 轻量，不引入重框架 |
+| 持久化 | localStorage（存档）+ IndexedDB（AI缓存） | |
+| AI通信 | fetch → Claude API（异步队列） | 所有AI请求统一管理 |
+| 构建工具 | Vite | 热更新 + 打包 |
+
+## 1.2 屏幕布局
+
+
+┌─────────────────────────────────────────────────────────────┐
+│  顶部状态栏 (TopBar) — 固定常驻                              │
+│  [💰 12,450G] [🌾 340] [⛏️ 128] [🪵 220] [🔬 890]          │
+│  [👥 14/20] [📅 第3年 秋 第12日] [⏸暂停] [▶×1] [⏩×3] [⏩×6] │
+├──────────────┬──────────────────────────────────────────────┤
+│              │                                              │
+│  左侧工具栏   │           主游戏区域 (Canvas)                 │
+│  (ToolPanel) │           可拖拽/缩放的等距网格地图            │
+│              │           建筑、居民、游客实时渲染             │
+│  [🏗️ 建造]  │                                              │
+│  [👥 居民]   │           点击建筑/居民/游客                  │
+│  [🔬 研究]   │           弹出右侧面板对应详情                │
+│  [🗺️ 探索]  │                                              │
+│  [🌍 外交]   │                                              │
+│  [📊 统计]   │                                              │
+│  [⚙️ 设置]  │                                              │
+│              │                                              │
+│  引力热力图   │                                              │
+│  切换按钮：   │                                              │
+│  [🍳][📚]    │                                              │
+│  [🛋️][⚔️]   │                                              │
+│  [🎭][🌿]    │                                              │
+│              │                                              │
+├──────────────┼──────────────────────────────────────────────┤
+│              │  右侧面板 (SidePanel) — 根据上下文动态切换     │
+│              │  • 建筑信息 / 生产链视图                      │
+│              │  • 居民详情 / 日记                            │
+│              │  • 游客信息 / 消费记录                        │
+│              │  • 研究树 / 科技详情                          │
+│              │  • 探索地图 / 编队                            │
+│              │  • 外星种族外交面板                           │
+├──────────────┴──────────────────────────────────────────────┤
+│  底部信息栏 (BottomBar) — 事件通知滚动                        │
+│  "汉克完成了一炉A+级星糖吐司！" ← "章鱼星人的飞船正在降落…"  │
+└─────────────────────────────────────────────────────────────┘
+
+
+## 1.3 游戏时间系统
+
+
+const TIME_CONFIG = {
+  // 时间单位
+  ms_per_tick: 1000,          // 1秒现实时间 = 1 tick（×1速度下）
+  ticks_per_hour: 1,          // 1 tick = 1 游戏小时
+  hours_per_day: 24,          // 1 天 = 24 ticks
+  days_per_season: 30,        // 1 季 = 30 天
+  seasons_per_year: 4,        // 春/夏/秋/冬
+  // 1 游戏年 = 120 天 = 2880 ticks ≈ 48分钟现实时间（×1速度）
+
+  // 速度档位
+  speed_options: [0, 1, 3, 6], // 暂停, 正常, 快进, 极速
+
+  // 季节效果
+  season_effects: {
+    spring: { farm_output: 1.2,  tourist_modifier: 1.0, description: '万物复苏' },
+    summer: { farm_output: 1.0,  tourist_modifier: 1.3, description: '旅游旺季' },
+    autumn: { farm_output: 1.5,  tourist_modifier: 1.1, description: '收获季节' },
+    winter: { farm_output: 0.5,  tourist_modifier: 0.7, description: '寒冬将至' }
+  }
+};
+
+
+---
+
+# 第二部分：六维引力系统（核心支柱）
+
+---
+
+这是整个游戏的统一坐标体系。所有建筑、产品、居民、游客、区域、科技、事件就在这六个维度上有可计算的位置。
+
+## 2.1 定义
+
+
+const GRAVITY_DIMENSIONS = {
+  food:      { id: 'food',      name: '美食', icon: '🍳', color: '#FF8C42',
+               description: '食物的丰富度与品质' },
+  knowledge: { id: 'knowledge', name: '知识', icon: '📚', color: '#4A90D9',
+               description: '学术与科技的氛围' },
+  comfort:   { id: 'comfort',   name: '舒适', icon: '🛋️', color: '#A8D8B9',
+               description: '生活品质与放松感' },
+  adventure: { id: 'adventure', name: '冒险', icon: '⚔️', color: '#E74C3C',
+               description: '刺激与挑战的吸引力' },
+  culture:   { id: 'culture',   name: '文化', icon: '🎭', color: '#9B59B6',
+               description: '艺术与历史的深度' },
+  nature:    { id: 'nature',    name: '自然', icon: '🌿', color: '#2ECC71',
+               description: '生态与自然环境的质感' }
+};
+
+
+## 2.2 引力向量
+
+游戏中所有实体都携带一个六维向量，每个维度 0~100：
+
+
+class GravityVector {
+  constructor({ food=0, knowledge=0, comfort=0, adventure=0, culture=0, nature=0 } = {}) {
+    this.food = food;
+    this.knowledge = knowledge;
+    this.comfort = comfort;
+    this.adventure = adventure;
+    this.culture = culture;
+    this.nature = nature;
+  }
+}
+
+
+## 2.3 引力场计算
+
+每个建筑向周围地块辐射引力，随距离衰减。地块的总引力场是周围所有建筑贡献的叠加。
+
+
+function calculateGravityFromBuilding(building, targetCol, targetRow) {
+  const distance = Math.abs(building.col - targetCol) + Math.abs(building.row - targetRow);
+  if (distance > 5) return null; // 超过5格无影响
+
+  const result = {};
+  for (const [dim, value] of Object.entries(building.gravity)) {
+    // 衰减公式：基础值 / (1 + distance × 0.5)
+    result[dim] = Math.floor(value / (1 + distance * 0.5));
+  }
+  return result;
+}
+
+function calculateTileGravityField(col, row, gameState) {
+  const field = { food:0, knowledge:0, comfort:0, adventure:0, culture:0, nature:0 };
+
+  // 建筑贡献
+  for (const building of gameState.buildings) {
+    const contribution = calculateGravityFromBuilding(building, col, row);
+    if (contribution) {
+      for (const dim of Object.keys(field)) {
+        field[dim] += contribution[dim] || 0;
+      }
+    }
+  }
+
+  // 地形自然贡献
+  const tile = gameState.map[col][row];
+  if (tile.gravity_bonus) {
+    for (const [dim, val] of Object.entries(tile.gravity_bonus)) {
+      field[dim] += val;
+    }
+  }
+
+  // 活跃组合加成
+  for (const combo of gameState.activeCombos) {
+    if (isInComboRadius(col, row, combo)) {
+      for (const dim of Object.keys(field)) {
+        field[dim] += combo.gravity_bonus?.[dim] || 0;
+      }
+    }
+  }
+
+  return field;
+}
+
+
+## 2.4 引力匹配算法
+
+游客/居民选择去哪里时，用偏好向量与目标引力场做匹配度计算：
+
+
+function calculateAttraction(preferenceVector, targetGravity) {
+  let score = 0;
+  const dims = ['food','knowledge','comfort','adventure','culture','nature'];
+  for (const dim of dims) {
+    score += (preferenceVector[dim] || 0) * (targetGravity[dim] || 0);
+  }
+  return Math.min(100, score / 100); // 归一化到 0-100
+}
+
+
+## 2.5 引力热力图可视化
+
+玩家点击左侧引力按钮或按数字键 1-6 切换查看对应维度的热力图叠加层：
+
+
+function renderGravityHeatmap(ctx, dimension, gameState) {
+  const color = GRAVITY_DIMENSIONS[dimension].color;
+  const rgb = hexToRgb(color);
+
+  for (let col = 0; col < gameState.mapWidth; col++) {
+    for (let row = 0; row < gameState.mapHeight; row++) {
+      const tile = gameState.map[col][row];
+      if (!tile.discovered) continue;
+
+      const gravity = calculateTileGravityField(col, row, gameState);
+      const value = gravity[dimension] || 0;
+      const intensity = Math.min(1, value / 100);
+
+      if (intensity > 0.05) {
+        const screenPos = gridToScreen(col, row);
+        ctx.fillStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},${intensity * 0.5})`;
+        ctx.fillRect(screenPos.x, screenPos.y, TILE_SIZE, TILE_SIZE);
+
+        if (intensity > 0.3) {
+          ctx.fillStyle = 'white';
+          ctx.font = '10px monospace';
+          ctx.fillText(value.toString(), screenPos.x + 2, screenPos.y + 12);
+        }
+      }
+    }
+  }
+}
+
+
+---
+
+# 第三部分：地块与地图系统
+
+---
+
+## 3.1 网格配置
+
+
+const GRID_CONFIG = {
+  initial_width: 12,       // 初始可见宽度（格）
+  initial_height: 10,      // 初始可见高度（格）
+  max_width: 40,           // 最大可扩展宽度
+  max_height: 35,          // 最大可扩展高度
+  tile_render_size: 48     // 单格渲染像素（可缩放）
+};
+
+
+## 3.2 地块类型
+
+
+const TILE_TYPES = {
+  plains: {
+    id: 'plains', name: '平原', buildable: true,
+    color: '#90C967',
+    gravity_bonus: { nature: 5 },
+    fertility: [0.7, 1.0],      // 农业适性范围
+    mineral_richness: [0.1, 0.3] // 矿产丰富度范围
+  },
+  forest: {
+    id: 'forest', name: '森林', buildable: true,
+    color: '#4A7C3B',
+    gravity_bonus: { nature: 20 },
+    fertility: [0.4, 0.6],
+    mineral_richness: [0.1, 0.2],
+    harvest: { resource: 'wood', amount: 20, converts_to: 'plains' },
+    description: '砍伐后可建设，产出木材，但永久失去自然引力加成'
+  },
+  water: {
+    id: 'water', name: '水域', buildable: false,
+    color: '#5B9BD5',
+    gravity_bonus: { nature: 25, comfort: 10 },
+    adjacent_bonus: { comfort: 8, nature: 5 },
+    description: '不可建设，但相邻建筑获得舒适与自然加成'
+  },
+  mountain: {
+    id: 'mountain', name: '山地', buildable: false,
+    color: '#8B7355',
+    gravity_bonus: { adventure: 15, nature: 15 },
+    description: '不可建设，山脚可建设矿场'
+  },
+  rocky: {
+    id: 'rocky', name: '岩地', buildable: true,
+    color: '#A0927B',
+    gravity_bonus: { adventure: 5 },
+    fertility: [0.1, 0.2],
+    mineral_richness: [0.6, 0.9],
+    build_cost_modifier: 1.5,
+    description: '农业效率-50%，采矿效率+30%'
+  },
+  fertile: {
+    id: 'fertile', name: '沃土', buildable: true,
+    color: '#6B4E2D',
+    gravity_bonus: { food: 15, nature: 10 },
+    fertility: [0.9, 1.0],
+    mineral_richness: [0.1, 0.2],
+    farm_bonus: 1.3,
+    description: '农田产出+30%'
+  },
+  crystal: {
+    id: 'crystal', name: '晶原', buildable: true,
+    color: '#C8BFE7',
+    gravity_bonus: { knowledge: 15, culture: 10 },
+    fertility: [0, 0],
+    mineral_richness: [0.8, 1.0],
+    special_resource: 'crystal_shard',
+    description: '特殊矿产来源'
+  },
+  sand: {
+    id: 'sand', name: '沙地', buildable: true,
+    color: '#E8D5A3',
+    gravity_bonus: { adventure: 5, nature: 5 },
+    fertility: [0.2, 0.4],
+    mineral_richness: [0.3, 0.5],
+    special: '仙人掌果只能在沙地种植'
+  },
+  hot_spring: {
+    id: 'hot_spring', name: '温泉', buildable: false,
+    color: '#FFD4A8',
+    gravity_bonus: { comfort: 30, nature: 15 },
+    adjacent_bonus: { comfort: 15, food: 5 },
+    description: '相邻可建温泉旅馆（特殊建筑）'
+  },
+  volcanic: {
+    id: 'volcanic', name: '火山岩', buildable: true,
+    color: '#8B3A3A',
+    gravity_bonus: { adventure: 20, nature: 5 },
+    fertility: [0, 0],
+    mineral_richness: [0.7, 0.9],
+    unlock_condition: 'tech_volcanic_engineering',
+    description: '需要冷却处理科技解锁建设'
+  },
+  ruins: {
+    id: 'ruins', name: '遗迹', buildable: false,
+    color: '#8C8C8C',
+    gravity_bonus: { knowledge: 20, culture: 20, adventure: 15 },
+    description: '需要探索后解锁，可能获得科技或图纸'
+  },
+  anomaly: {
+    id: 'anomaly', name: '异常地', buildable: false,
+    color: '#FF6B9D',
+    gravity_bonus: { adventure: 30, knowledge: 10 },
+    description: '周期性产生随机事件'
+  },
+  fog: {
+    id: 'fog', name: '迷雾', buildable: false,
+    color: '#2C2C2C',
+    description: '未探索区域'
+  }
+};
+
+
+## 3.3 地块数据结构
+
+
+const Tile = {
+  col: Number,
+  row: Number,
+  terrain: String,           // TILE_TYPES 的 id
+  discovered: Boolean,
+  building_id: String|null,
+  road_level: Number,        // 0=无路, 1=土路, 2=石板路, 3=合金路
+  decoration_id: String|null,
+  fertility: Number,         // 0-1，由地形类型范围随机生成
+  mineral_richness: Number,  // 0-1
+  beauty: Number             // 动态计算，受周围装饰和建筑影响
+};
+
+
+## 3.4 地图生成
+
+
+function generateMap(seed, width, height) {
+  const noise = new SimplexNoise(seed);
+  const map = [];
+
+  for (let col = 0; col < width; col++) {
+    map[col] = [];
+    for (let row = 0; row < height; row++) {
+      const elevation = noise.noise2D(col * 0.1, row * 0.1);
+      const moisture  = noise.noise2D(col * 0.08 + 100, row * 0.08 + 100);
+      const mineral   = noise.noise2D(col * 0.15 + 200, row * 0.15 + 200);
+
+      let terrain;
+      if (elevation > 0.75)                           terrain = 'mountain';
+      else if (elevation < 0.2 && moisture > 0.6)     terrain = 'water';
+      else if (moisture > 0.7)                         terrain = 'forest';
+      else if (moisture > 0.5 && elevation < 0.5)     terrain = 'fertile';
+      else if (mineral > 0.8)                          terrain = 'rocky';
+      else if (mineral > 0.85 && elevation > 0.4)     terrain = 'crystal';
+      else                                             terrain = 'plains';
+
+      const tileType = TILE_TYPES[terrain];
+      map[col][row] = {
+        col, row,
+        terrain,
+        discovered: false,
+        building_id: null,
+        road_level: 0,
+        decoration_id: null,
+        fertility: randomInRange(tileType.fertility?.[0] ?? 0, tileType.fertility?.[1] ?? 0),
+        mineral_richness: randomInRange(tileType.mineral_richness?.[0] ?? 0, tileType.mineral_richness?.[1] ?? 0),
+        beauty: 0
+      };
+    }
+  }
+
+  // 初始可见区域：中心 12×10
+  const cx = Math.floor(width / 2), cy = Math.floor(height / 2);
+  for (let dx = -6; dx < 6; dx++) {
+    for (let dy = -5; dy < 5; dy++) {
+      if (map[cx+dx]?.[cy+dy]) map[cx+dx][cy+dy].discovered = true;
+    }
+  }
+
+  // 开局保证规则
+  guaranteeStartArea(map, cx, cy, {
+    min_plains: 40,
+    min_fertile: 6,
+    max_water: 8,
+    require_forest: true,
+    require_water_adjacent: true
+  });
+
+  // 散布特殊地形（不在初始区域内）
+  placeSpecialTiles(map, 'hot_spring', { count: [2,4], min_dist: 8 });
+  placeSpecialTiles(map, 'ruins',      { count: [3,6], min_dist: 6 });
+  placeSpecialTiles(map, 'anomaly',    { count: [1,3], min_dist: 12 });
+
+  // 放置初始建筑
+  map[cx][cy].building_id = 'b_headquarters_0';     // 指挥中心
+  map[cx-1][cy].building_id = 'b_tent_0';           // 初始帐篷
+  map[cx+1][cy].building_id = 'b_warehouse_0';      // 初始仓库
+  map[cx][cy-1].road_level = 1;                      // 初始道路
+  map[cx][cy+1].road_level = 1;
+
+  return { map, width, height, seed, startX: cx, startY: cy };
+}
+
+
+## 3.5 地块交互规则
+
+
+function canPlaceBuilding(template, col, row, gameState) {
+  const tile = gameState.map[col][row];
+  const tileType = TILE_TYPES[tile.terrain];
+
+  if (!tile.discovered) return { ok: false, reason: '需要先探索该区域' };
+  if (tile.building_id)  return { ok: false, reason: '已有建筑' };
+  if (!tileType.buildable) return { ok: false, reason: `不能建在${tileType.name}上` };
+
+  // 多格建筑检查
+  for (let dx = 0; dx < template.size.w; dx++) {
+    for (let dy = 0; dy < template.size.h; dy++) {
+      const t = gameState.map[col+dx]?.[row+dy];
+      if (!t || !t.discovered || t.building_id || !TILE_TYPES[t.terrain].buildable) {
+        return { ok: false, reason: '占用区域不可用' };
+      }
+    }
+  }
+
+  // 地形要求
+  if (template.terrain_requirement?.required_terrain) {
+    if (!template.terrain_requirement.required_terrain.includes(tile.terrain)) {
+      return { ok: false, reason: `需要建在指定地形上` };
+    }
+  }
+  if (template.terrain_requirement?.required_adjacent) {
+    const adj = getAdjacentTiles(col, row, gameState.map);
+    if (!adj.some(t => template.terrain_requirement.required_adjacent.includes(t.terrain))) {
+      return { ok: false, reason: `需要与指定地形相邻` };
+    }
+  }
+
+  // 资源检查
+  for (const [res, amt] of Object.entries(template.build_cost)) {
+    if (res === 'special') continue;
+    if ((gameState.resources[res] || 0) < amt) {
+      return { ok: false, reason: `${res}不足` };
+    }
+  }
+  for (const spec of (template.build_cost.special || [])) {
+    if ((gameState.resources[spec.item_id] || 0) < spec.amount) {
+      return { ok: false, reason: `${spec.item_id}不足` };
+    }
+  }
+
+  // 前置科技检查
+  if (template.unlock?.tech_required && !gameState.researched.includes(template.unlock.tech_required)) {
+    return { ok: false, reason: '需要先研究对应科技' };
+  }
+
+  // 前置建筑检查
+  if (template.unlock?.building_required && !gameState.buildings.some(b => b.type_id === template.unlock.building_required)) {
+    return { ok: false, reason: '需要先建造前置建筑' };
+  }
+
+  // 人口要求
+  if (template.unlock?.population_min && Object.keys(gameState.residents).length < template.unlock.population_min) {
+    return { ok: false, reason: `需要至少${template.unlock.population_min}名居民` };
+  }
+
+  // 唯一建筑检查
+  if (template.unique && gameState.buildings.some(b => b.type_id === template.id)) {
+    return { ok: false, reason: '该建筑只能建造一个' };
+  }
+
+  return { ok: true };
+}
+
+
+---
+
+# 第四部分：建筑系统
+
+---
+
+## 4.1 建筑标准化 Schema（AI生成新建筑时必须遵循）
+
+
+const BUILDING_SCHEMA = {
+  // ===== 身份 =====
+  id: String,              // 唯一ID "b_bakery"
+  name: String,            // 显示名 "面包工坊"
+  category: String,        // 大类（见枚举）
+  subcategory: String,     // 子类 "food_processing"
+  tags: [String],          // 标签（AI组合判定依据）["food","aromatic","processing"]
+  description: String,     // 一句话描述
+
+  // ===== 六维引力 =====
+  gravity: {
+    food: Number,          // 0-100
+    knowledge: Number,
+    comfort: Number,
+    adventure: Number,
+    culture: Number,
+    nature: Number
+  },
+
+  // ===== 建设 =====
+  build_cost: {
+    gold: Number,
+    wood: Number,
+    stone: Number,
+    special: [{ item_id: String, amount: Number }]
+  },
+  build_time: Number,      // 天
+  size: { w: Number, h: Number },
+
+  // ===== 运营 =====
+  max_workers: Number,
+  upkeep_per_day: { gold: Number, food: Number, energy: Number },
+
+  // ===== 生产（仅生产类） =====
+  recipes: [{
+    id: String,
+    name: String,
+    inputs: [{ item_id: String, amount: Number }],
+    output: { item_id: String, base_amount: Number },
+    base_time: Number,     // 生产周期（tick）
+    output_tags: [String],
+    output_gravity: { food:Number, knowledge:Number, comfort:Number, adventure:Number, culture:Number, nature:Number },
+    quality_factors: {
+      worker_stat_weight: Number,   // 0-1
+      input_quality_weight: Number,
+      facility_level_weight: Number,
+      combo_bonus_weight: Number
+    },
+    tech_required: String|null
+  }],
+
+  // ===== 商业（仅商业/旅游类） =====
+  commercial: {
+    tourist_capacity: Number,
+    sells_product_types: [String],
+    base_price_modifier: Number,
+    visit_duration: Number
+  } | null,
+
+  // ===== 特殊效果 =====
+  effects: [{
+    type: String,          // 效果类型枚举
+    target: String,        // "self"/"adjacent"/"radius_N"/"zone"/"global"
+    value: Number,
+    gravity_dim: String|null, // 如 gravity_boost 时指定维度
+    description: String
+  }],
+
+  // ===== 地形 =====
+  terrain_requirement: {
+    required_terrain: [String]|null,
+    required_adjacent: [String]|null,
+    forbidden_adjacent: [String]|null
+  },
+
+  // ===== 解锁条件 =====
+  unlock: {
+    tech_required: String|null,
+    building_required: String|null,
+    population_min: Number|null,
+    exploration_required: String|null
+  },
+
+  // ===== 升级 =====
+  level_max: Number,
+  upgrades: [{
+    level: Number,
+    cost_multiplier: Number,
+    production_bonus: Number,       // 产速加成%
+    gravity_bonus: Object|null,     // 额外引力
+    new_effect: Object|null,
+    visual_change: String
+  }],
+
+  // ===== AI文案 =====
+  flavor: {
+    build_complete_text: String,
+    idle_text: String,
+    busy_text: String,
+    combo_hint: String|null
+  },
+
+  // ===== 唯一性 =====
+  unique: Boolean,          // 是否全局唯一
+  special_rules: String|null
+};
+
+// 建筑大类枚举
+const BUILDING_CATEGORIES = [
+  'housing', 'primary_production', 'processing', 'commercial',
+  'tourism', 'research', 'military', 'infrastructure', 'decoration', 'special'
+];
+
+// 效果类型枚举
+const EFFECT_TYPES = [
+  'production_speed', 'product_quality', 'tourist_attraction', 'tourist_spending',
+  'resident_mood', 'gravity_boost', 'research_speed', 'combat_boost',
+  'upkeep_reduction', 'resource_yield', 'resource_capacity', 'movement_speed',
+  'zone_synergy', 'unlock_recipe'
+];
+
+
+## 4.2 建筑实例数据结构
+
+
+const BuildingInstance = {
+  id: String,                      // 实例唯一ID "b_bakery_7"
+  type_id: String,                 // 模板ID "b_bakery"
+  col: Number, row: Number,        // 位置
+  level: Number,                   // 当前等级
+  is_active: Boolean,              // 是否运作中
+  is_connected: Boolean,           // 是否通过道路连接到指挥中心
+  assigned_workers: [String],      // 工人ID列表
+
+  production: {
+    current_recipe: String|null,   // 当前配方ID
+    progress: Number,              // 0-1
+    input_buffer: {},              // 原料缓冲 { item_id: amount }
+    output_buffer: []              // 产出队列 [Product]
+  },
+
+  active_combos: [String],        // 当前生效的组合ID
+  special_flags: [String]
+};
+
+
+## 4.3 预设建筑完整列表
+
+### 指挥与基础
+
+
+const B_HEADQUARTERS = {
+  id: 'b_headquarters', name: '指挥部', category: 'special', subcategory: 'core',
+  tags: ['core', 'command', 'administrative'],
+  gravity: { food:0, knowledge:20, comfort:15, adventure:5, culture:10, nature:0 },
+  build_cost: { gold:0, wood:0, stone:0, special:[] }, build_time: 0,
+  size: { w:2, h:2 }, max_workers: 0,
+  upkeep_per_day: { gold:0, food:0, energy:0 },
+  recipes: [], commercial: null,
+  effects: [{ type:'gravity_boost', target:'radius_3', value:5, gravity_dim:'all', description:'指挥部周围所有引力+5' }],
+  terrain_requirement: { required_terrain:null, required_adjacent:null, forbidden_adjacent:null },
+  unlock: { tech_required:null, building_required:null, population_min:null, exploration_required:null },
+  level_max: 10, upgrades: [], unique: true,
+  flavor: { build_complete_text:'这是家。至少目前是。', idle_text:'指挥部的灯永远亮着。', busy_text:'（通讯器里传来各种报告声）', combo_hint:null }
+};
+
+const B_TENT = {
+  id: 'b_tent', name: '帐篷', category: 'housing', subcategory: 'basic',
+  tags: ['housing', 'basic', 'shelter'],
+  gravity: { food:0, knowledge:0, comfort:20, adventure:5, culture:0, nature:5 },
+  build_cost: { gold:100, wood:5, stone:0, special:[] }, build_time: 0,
+  size: { w:1, h:1 }, max_workers: 0,
+  upkeep_per_day: { gold:2, food:0, energy:0 },
+  recipes: [], commercial: null,
+  effects: [{ type:'resident_mood', target:'self', value:5, description:'有个遮风挡雨的地方' }],
+  terrain_requirement: { required_terrain:null, required_adjacent:null, forbidden_adjacent:null },
+  unlock: { tech_required:null, building_required:null, population_min:null, exploration_required:null },
+  level_max: 1, upgrades: [], unique: false,
+  special_rules: '住1人。居民在此休息恢复HP。',
+  flavor: { build_complete_text:'四根棍子加一块布。但它是家。', idle_text:'帐篷在风中轻轻鼓动。', busy_text:'（呼噜声）', combo_hint:'以后有钱了建个小屋吧。' }
+};
+
+const B_COTTAGE = {
+  id: 'b_cottage', name: '小屋', category: 'housing', subcategory: 'basic',
+  tags: ['housing', 'comfort', 'wooden'],
+  gravity: { food:0, knowledge:0, comfort:40, adventure:0, culture:5, nature:10 },
+  build_cost: { gold:400, wood:30, stone:15, special:[] }, build_time: 2,
+  size: { w:1, h:1 }, max_workers: 0,
+  upkeep_per_day: { gold:5, food:0, energy:0 },
+  recipes: [], commercial: null,
+  effects: [{ type:'resident_mood', target:'self', value:15, description:'一张真正的床和一扇真正的窗' }],
+  terrain_requirement: { required_terrain:null, required_adjacent:null, forbidden_adjacent:null },
+  unlock: { tech_required:'tech_construction', building_required:null, population_min:null, exploration_required:null },
+  level_max: 3, upgrades: [
+    { level:2, cost_multiplier:2, production_bonus:0, new_effect:{ type:'resident_mood', target:'self', value:20 }, visual_change:'加了个小花园' },
+    { level:3, cost_multiplier:3, production_bonus:0, gravity_bonus:{ comfort:+10 }, visual_change:'有了二楼和阳台' }
+  ], unique: false,
+  special_rules: '住2人。',
+  flavor: { build_complete_text:'第一面真正的墙——摸上去很踏实。', idle_text:'窗台上不知何时多了一盆花。', busy_text:'（壁炉里柴火噼啪声）', combo_hint:'旁边有公园的话住着更舒服。' }
+};
+
+const B_WAREHOUSE = {
+  id: 'b_warehouse', name: '仓库', category: 'infrastructure', subcategory: 'storage',
+  tags: ['infrastructure', 'storage', 'logistics'],
+  gravity: { food:5, knowledge:0, comfort:5, adventure:0, culture:0, nature:0 },
+  build_cost: { gold:300, wood:80, stone:20, special:[] }, build_time: 2,
+  size: { w:1, h:1 }, max_workers: 1,
+  upkeep_per_day: { gold:5, food:0, energy:0 },
+  recipes: [], commercial: null,
+  effects: [{ type:'resource_capacity', target:'global', value:200, description:'所有资源存储上限+200' }],
+  terrain_requirement: { required_terrain:null, required_adjacent:null, forbidden_adjacent:null },
+  unlock: { tech_required:null, building_required:null, population_min:null, exploration_required:null },
+  level_max: 5, upgrades: [
+    { level:2, cost_multiplier:2, production_bonus:0, new_effect:{ type:'resource_capacity', target:'global', value:400 }, visual_change:'货架更高了' }
+  ], unique: false,
+  flavor: { build_complete_text:'终于不用把矿石堆在指挥部门口了。', idle_text:'整整齐齐的货架。', busy_text:'（管理员在清点库存）', combo_hint:'靠近生产建筑可以减少搬运时间。' }
+};
+
+const B_ROAD = {
+  id: 'b_road', name: '道路', category: 'infrastructure', subcategory: 'road',
+  tags: ['infrastructure', 'road'],
+  gravity: { food:0, knowledge:0, comfort:10, adventure:0, culture:0, nature:0 },
+  build_cost: { gold:20, wood:0, stone:5, special:[] }, build_time: 0,
+  size: { w:1, h:1 }, max_workers: 0,
+  upkeep_per_day: { gold:0, food:0, energy:0 },
+  recipes: [], commercial: null,
+  effects: [{ type:'movement_speed', target:'self', value:50, description:'移动速度+50%' }],
+  terrain_requirement: { required_terrain:null, required_adjacent:null, forbidden_adjacent:null },
+  unlock: { tech_required:null, building_required:null, population_min:null, exploration_required:null },
+  level_max: 3, upgrades: [
+    { level:2, cost_multiplier:3, production_bonus:0, new_effect:{ type:'movement_speed', target:'self', value:80 }, visual_change:'石板路' },
+    { level:3, cost_multiplier:8, production_bonus:0, new_effect:{ type:'movement_speed', target:'self', value:120 }, visual_change:'合金路，闪闪发光' }
+  ], unique: false,
+  special_rules: '不占用建筑槽位，可与建筑重叠。建筑必须通过道路连接到指挥部才能运作。',
+  flavor: { build_complete_text:'脚下踏实了。', idle_text:null, busy_text:null, combo_hint:null }
+};
+
+
+### 第一产业（采集/种植/畜牧）
+
+
+const B_WHEAT_FARM = {
+  id: 'b_wheat_farm', name: '麦田', category: 'primary_production', subcategory: 'farming',
+  tags: ['food', 'agriculture', 'grain', 'organic'],
+  gravity: { food:60, knowledge:0, comfort:10, adventure:0, culture:5, nature:40 },
+  build_cost: { gold:200, wood:30, stone:0, special:[] }, build_time: 2,
+  size: { w:1, h:1 }, max_workers: 2,
+  upkeep_per_day: { gold:5, food:0, energy:0 },
+  recipes: [{
+    id: 'wheat', name: '小麦', inputs: [],
+    output: { item_id:'wheat', base_amount:3 },
+    base_time: 8, output_tags: ['food_raw','grain'],
+    output_gravity: { food:30, knowledge:0, comfort:0, adventure:0, culture:0, nature:20 },
+    quality_factors: { worker_stat_weight:0.5, input_quality_weight:0, facility_level_weight:0.3, combo_bonus_weight:0.2 },
+    tech_required: null
+  }],
+  commercial: null,
+  effects: [],
+  terrain_requirement: { required_terrain:['plains','fertile'], required_adjacent:null, forbidden_adjacent:null },
+  unlock: { tech_required:null, building_required:null, population_min:null, exploration_required:null },
+  level_max: 5, upgrades: [
+    { level:2, cost_multiplier:2, production_bonus:0.2, visual_change:'田地更大了' },
+    { level:3, cost_multiplier:3, production_bonus:0.3, gravity_bonus:{ food:+10 }, visual_change:'出现灌溉水渠' },
+    { level:5, cost_multiplier:6, production_bonus:0.6, new_effect:{ type:'zone_synergy', target:'radius_2', value:10, description:'丰收之地：周围2格农业产出+10%' }, visual_change:'稻草人和小鸟' }
+  ], unique: false,
+  flavor: { build_complete_text:'金色麦穗在风中摇曳。虽然现在还只是一片土。', idle_text:'麦子在安静地长。', busy_text:'沙沙沙——收割的声音。', combo_hint:'如果旁边有个面包工坊就好了……' }
+};
+
+const B_RANCH = {
+  id: 'b_ranch', name: '牧场', category: 'primary_production', subcategory: 'ranching',
+  tags: ['food', 'agriculture', 'dairy', 'organic', 'animal'],
+  gravity: { food:50, knowledge:0, comfort:20, adventure:0, culture:5, nature:45 },
+  build_cost: { gold:400, wood:60, stone:10, special:[] }, build_time: 3,
+  size: { w:2, h:1 }, max_workers: 2,
+  upkeep_per_day: { gold:10, food:5, energy:0 },
+  recipes: [{
+    id: 'milk', name: '六腿牛奶', inputs: [{ item_id:'wheat', amount:1 }],
+    output: { item_id:'milk', base_amount:2 },
+    base_time: 10, output_tags: ['food_raw','dairy'],
+    output_gravity: { food:25, knowledge:0, comfort:10, adventure:0, culture:0, nature:10 },
+    quality_factors: { worker_stat_weight:0.4, input_quality_weight:0.3, facility_level_weight:0.2, combo_bonus_weight:0.1 },
+    tech_required: null
+  }],
+  commercial: null, effects: [],
+  terrain_requirement: { required_terrain:['plains','fertile'], required_adjacent:null, forbidden_adjacent:['b_mine'] },
+  unlock: { tech_required:'tech_animal_husbandry', building_required:'b_wheat_farm', population_min:6, exploration_required:null },
+  level_max: 4, upgrades: [], unique: false,
+  flavor: { build_complete_text:'牛……或者说，六条腿的牛。产奶很好。', idle_text:'哞——？', busy_text:'挤奶中。', combo_hint:'奶酪工坊在等着这些牛奶。' }
+};
+
+const B_MINE = {
+  id: 'b_mine', name: '矿场', category: 'primary_production', subcategory: 'mining',
+  tags: ['mining', 'mineral', 'industrial'],
+  gravity: { food:0, knowledge:10, comfort:0, adventure:15, culture:0, nature:0 },
+  build_cost: { gold:500, wood:50, stone:20, special:[] }, build_time: 4,
+  size: { w:1, h:1 }, max_workers: 3,
+  upkeep_per_day: { gold:15, food:0, energy:5 },
+  recipes: [{
+    id: 'iron_ore', name: '铁矿石', inputs: [],
+    output: { item_id:'iron_ore', base_amount:2 },
+    base_time: 12, output_tags: ['material','metal_raw'],
+    output_gravity: { food:0, knowledge:5, comfort:0, adventure:5, culture:0, nature:0 },
+    quality_factors: { worker_stat_weight:0.5, input_quality_weight:0, facility_level_weight:0.3, combo_bonus_weight:0.2 },
+    tech_required: null
+  }],
+  commercial: null, effects: [],
+  terrain_requirement: { required_terrain:['rocky'], required_adjacent:['mountain'], forbidden_adjacent:null },
+  unlock: { tech_required:'tech_basic_mining', building_required:null, population_min:5, exploration_required:null },
+  level_max: 5, upgrades: [
+    { level:3, cost_multiplier:3.5, production_bonus:0.35, new_effect:{ type:'resource_yield', target:'self', value:10, description:'10%概率额外产出稀有矿石' }, visual_change:'出现升降机' }
+  ], unique: false,
+  flavor: { build_complete_text:'叮叮当当的声音从地底传来。', idle_text:'矿工在喝茶。', busy_text:'嘿——嘿——嘿——', combo_hint:'有冶炼厂就可以直接加工矿石了。' }
+};
+
+const B_LUMBER_CAMP = {
+  id: 'b_lumber_camp', name: '伐木场', category: 'primary_production', subcategory: 'forestry',
+  tags: ['forestry', 'organic', 'material'],
+  gravity: { food:0, knowledge:0, comfort:0, adventure:5, culture:0, nature:20 },
+  build_cost: { gold:150, wood:0, stone:10, special:[] }, build_time: 1,
+  size: { w:1, h:1 }, max_workers: 2,
+  upkeep_per_day: { gold:3, food:0, energy:0 },
+  recipes: [{
+    id: 'wood', name: '木材', inputs: [],
+    output: { item_id:'wood', base_amount:4 },
+    base_time: 6, output_tags: ['material','organic'],
+    output_gravity: { food:0, knowledge:0, comfort:5, adventure:0, culture:0, nature:15 },
+    quality_factors: { worker_stat_weight:0.6, input_quality_weight:0, facility_level_weight:0.2, combo_bonus_weight:0.2 },
+    tech_required: null
+  }],
+  commercial: null, effects: [],
+  terrain_requirement: { required_terrain:null, required_adjacent:['forest'], forbidden_adjacent:null },
+  unlock: { tech_required:null, building_required:null, population_min:null, exploration_required:null },
+  level_max: 3, upgrades: [], unique: false,
+  flavor: { build_complete_text:'木头！文明的第一块积木！', idle_text:'伐木工在磨斧头。', busy_text:'咔——嚓——', combo_hint:'木工坊可以加工成木板。' }
+};
+
+const B_FLOWER_FARM = {
+  id: 'b_flower_farm', name: '花田', category: 'primary_production', subcategory: 'farming',
+  tags: ['agriculture', 'aromatic', 'organic', 'decorative'],
+  gravity: { food:5, knowledge:0, comfort:30, adventure:0, culture:25, nature:60 },
+  build_cost: { gold:300, wood:20, stone:0, special:[] }, build_time: 3,
+  size: { w:1, h:1 }, max_workers: 2,
+  upkeep_per_day: { gold:8, food:0, energy:0 },
+  recipes: [{
+    id: 'flower', name: '星辰花', inputs: [],
+    output: { item_id:'flower', base_amount:2 },
+    base_time: 10, output_tags: ['organic','aromatic','decorative'],
+    output_gravity: { food:0, knowledge:0, comfort:20, adventure:0, culture:15, nature:30 },
+    quality_factors: { worker_stat_weight:0.4, input_quality_weight:0, facility_level_weight:0.3, combo_bonus_weight:0.3 },
+    tech_required: null
+  }],
+  commercial: null,
+  effects: [{ type:'resident_mood', target:'radius_2', value:5, description:'花香让附近居民心情好一点' }],
+  terrain_requirement: { required_terrain:['plains','fertile'], required_adjacent:null, forbidden_adjacent:null },
+  unlock: { tech_required:'tech_botany', building_required:null, population_min:8, exploration_required:null },
+  level_max: 5, upgrades: [], unique: false,
+  flavor: { build_complete_text:'花海在阳光下绽放。蝴蝶从哪来的？这是外星球啊。', idle_text:'（蝴蝶在花间飞舞）', busy_text:'小心别踩到那朵——', combo_hint:'花和香水工坊天作之合。' }
+};
+
+
+### 第二产业（加工/制造）
+
+
+const B_BAKERY = {
+  id: 'b_bakery', name: '面包工坊', category: 'processing', subcategory: 'food_processing',
+  tags: ['food', 'aromatic', 'processing', 'artisan', 'baked'],
+  gravity: { food:80, knowledge:10, comfort:40, adventure:0, culture:15, nature:5 },
+  build_cost: { gold:600, wood:40, stone:30, special:[] }, build_time: 3,
+  size: { w:1, h:1 }, max_workers: 2,
+  upkeep_per_day: { gold:12, food:0, energy:3 },
+  recipes: [
+    {
+      id: 'bread', name: '面包',
+      inputs: [{ item_id:'wheat', amount:2 }],
+      output: { item_id:'bread', base_amount:2 },
+      base_time: 6, output_tags: ['food','baked','basic'],
+      output_gravity: { food:60, knowledge:0, comfort:30, adventure:0, culture:5, nature:5 },
+      quality_factors: { worker_stat_weight:0.4, input_quality_weight:0.3, facility_level_weight:0.15, combo_bonus_weight:0.15 },
+      tech_required: null
+    },
+    {
+      id: 'star_sugar_toast', name: '星糖吐司',
+      inputs: [{ item_id:'wheat', amount:2 }, { item_id:'milk', amount:1 }, { item_id:'star_sugar', amount:1 }],
+      output: { item_id:'star_sugar_toast', base_amount:1 },
+      base_time: 8, output_tags: ['food','baked','premium','seasonal_potential'],
+      output_gravity: { food:85, knowledge:0, comfort:40, adventure:0, culture:20, nature:10 },
+      quality_factors: { worker_stat_weight:0.35, input_quality_weight:0.35, facility_level_weight:0.15, combo_bonus_weight:0.15 },
+      tech_required: 'tech_advanced_baking'
+    }
+  ],
+  commercial: null, effects: [],
+  terrain_requirement: { required_terrain:null, required_adjacent:null, forbidden_adjacent:null },
+  unlock: { tech_required:'tech_basic_cooking', building_required:'b_wheat_farm', population_min:null, exploration_required:null },
+  level_max: 5, upgrades: [
+    { level:2, cost_multiplier:2, production_bonus:0.2, visual_change:'多了一个烤箱' },
+    { level:3, cost_multiplier:3, production_bonus:0.3, new_effect:{ type:'gravity_boost', target:'radius_1', value:5, gravity_dim:'food' }, visual_change:'烟囱冒出的香气更浓了' }
+  ], unique: false,
+  flavor: { build_complete_text:'烤箱预热中——整个殖民地都能闻到面包香。', idle_text:'……需要小麦。', busy_text:'（烤箱里传来让人幸福的咕噜声）', combo_hint:'旁边有牧场提供牛奶，也许能做更好的面包？' }
+};
+
+const B_SMELTER = {
+  id: 'b_smelter', name: '冶炼厂', category: 'processing', subcategory: 'material_processing',
+  tags: ['processing', 'metal', 'industrial', 'fire'],
+  gravity: { food:0, knowledge:25, comfort:0, adventure:10, culture:5, nature:0 },
+  build_cost: { gold:800, wood:30, stone:60, special:[] }, build_time: 5,
+  size: { w:1, h:1 }, max_workers: 2,
+  upkeep_per_day: { gold:20, food:0, energy:10 },
+  recipes: [{
+    id: 'iron_ingot', name: '铁锭',
+    inputs: [{ item_id:'iron_ore', amount:3 }],
+    output: { item_id:'iron_ingot', base_amount:2 },
+    base_time: 10, output_tags: ['material','metal','processed'],
+    output_gravity: { food:0, knowledge:10, comfort:0, adventure:10, culture:0, nature:0 },
+    quality_factors: { worker_stat_weight:0.5, input_quality_weight:0.2, facility_level_weight:0.2, combo_bonus_weight:0.1 },
+    tech_required: null
+  }],
+  commercial: null, effects: [],
+  terrain_requirement: { required_terrain:null, required_adjacent:null, forbidden_adjacent:null },
+  unlock: { tech_required:'tech_metallurgy', building_required:'b_mine', population_min:8, exploration_required:null },
+  level_max: 5, upgrades: [], unique: false,
+  flavor: { build_complete_text:'炉火点燃了。汉克说闻到了文明的味道。零号说那是硫化物。', idle_text:'炉火在等待矿石。', busy_text:'（铁水在炉中翻滚，橘红色光映在墙上）', combo_hint:'装备工坊需要铁锭来打造武器。' }
+};
+
+const B_CHEESE_WORKSHOP = {
+  id: 'b_cheese_workshop', name: '奶酪工坊', category: 'processing', subcategory: 'food_processing',
+  tags: ['food', 'dairy', 'fermented', 'artisan'],
+  gravity: { food:75, knowledge:5, comfort:30, adventure:0, culture:20, nature:10 },
+  build_cost: { gold:500, wood:35, stone:20, special:[] }, build_time: 3,
+  size: { w:1, h:1 }, max_workers: 1,
+  upkeep_per_day: { gold:8, food:0, energy:2 },
+  recipes: [{
+    id: 'cheese', name: '奶酪',
+    inputs: [{ item_id:'milk', amount:2 }],
+    output: { item_id:'cheese', base_amount:1 },
+    base_time: 12, output_tags: ['food','dairy','fermented','aged'],
+    output_gravity: { food:55, knowledge:0, comfort:25, adventure:0, culture:20, nature:5 },
+    quality_factors: { worker_stat_weight:0.35, input_quality_weight:0.35, facility_level_weight:0.15, combo_bonus_weight:0.15 },
+    tech_required: null
+  }],
+  commercial: null, effects: [],
+  terrain_requirement: { required_terrain:null, required_adjacent:null, forbidden_adjacent:null },
+  unlock: { tech_required:'tech_fermentation', building_required:'b_ranch', population_min:null, exploration_required:null },
+  level_max: 4, upgrades: [], unique: false,
+  flavor: { build_complete_text:'味道……嗯，需要时间适应。据说越臭越好？', idle_text:'奶酪在安静地发酵。', busy_text:'（一股复杂的气味飘出来）', combo_hint:'水晶星人对陈年奶酪有执念。' }
+};
+
+const B_PERFUME_WORKSHOP = {
+  id: 'b_perfume_workshop', name: '香水工坊', category: 'processing', subcategory: 'luxury_processing',
+  tags: ['luxury', 'aromatic', 'chemical', 'artisan'],
+  gravity: { food:0, knowledge:15, comfort:50, adventure:0, culture:45, nature:30 },
+  build_cost: { gold:900, wood:20, stone:30, special:[{ item_id:'crystal_shard', amount:2 }] }, build_time: 4,
+  size: { w:1, h:1 }, max_workers: 1,
+  upkeep_per_day: { gold:15, food:0, energy:5 },
+  recipes: [{
+    id: 'perfume', name: '星辰香水',
+    inputs: [{ item_id:'flower', amount:3 }],
+    output: { item_id:'perfume', base_amount:1 },
+    base_time: 15, output_tags: ['luxury','aromatic','chemical'],
+    output_gravity: { food:0, knowledge:5, comfort:40, adventure:0, culture:50, nature:25 },
+    quality_factors: { worker_stat_weight:0.3, input_quality_weight:0.3, facility_level_weight:0.2, combo_bonus_weight:0.2 },
+    tech_required: null
+  }],
+  commercial: null, effects: [],
+  terrain_requirement: { required_terrain:null, required_adjacent:null, forbidden_adjacent:null },
+  unlock: { tech_required:'tech_chemistry', building_required:'b_flower_farm', population_min:10, exploration_required:null },
+  level_max: 5, upgrades: [], unique: false,
+  flavor: { build_complete_text:'调香师说每一滴香水都是一首诗。矿工说他闻不出区别。', idle_text:'瓶瓶罐罐安静排列。', busy_text:'（蒸馏器发出细微咕嘟声）', combo_hint:'花田和酒店旁边会不会有什么特别的氛围？' }
+};
+
+const B_EQUIPMENT_WORKSHOP = {
+  id: 'b_equipment_workshop', name: '装备工坊', category: 'processing', subcategory: 'equipment',
+  tags: ['equipment', 'metal', 'crafting', 'military'],
+  gravity: { food:0, knowledge:20, comfort:0, adventure:40, culture:10, nature:0 },
+  build_cost: { gold:1000, wood:40, stone:50, special:[] }, build_time: 5,
+  size: { w:1, h:1 }, max_workers: 2,
+  upkeep_per_day: { gold:18, food:0, energy:8 },
+  recipes: [{
+    id: 'iron_sword', name: '铁剑',
+    inputs: [{ item_id:'iron_ingot', amount:2 }, { item_id:'wood', amount:1 }],
+    output: { item_id:'iron_sword', base_amount:1 },
+    base_time: 15, output_tags: ['equipment','weapon','metal'],
+    output_gravity: { food:0, knowledge:5, comfort:0, adventure:60, culture:10, nature:0 },
+    quality_factors: { worker_stat_weight:0.4, input_quality_weight:0.3, facility_level_weight:0.2, combo_bonus_weight:0.1 },
+    tech_required: null
+  }],
+  commercial: null, effects: [],
+  terrain_requirement: { required_terrain:null, required_adjacent:null, forbidden_adjacent:null },
+  unlock: { tech_required:'tech_smithing', building_required:'b_smelter', population_min:null, exploration_required:null },
+  level_max: 5, upgrades: [], unique: false,
+  flavor: { build_complete_text:'叮叮当当——第一柄剑出炉。虽然更像一把长一点的黄油刀。', idle_text:'铁砧在等待。', busy_text:'（火星四溅，锤起锤落）', combo_hint:'训练场的居民一直在抱怨武器不够好。' }
+};
+
+
+### 第三产业（商业/旅游/服务）
+
+
+const B_SPACEPORT = {
+  id: 'b_spaceport', name: '宇宙港', category: 'tourism', subcategory: 'transport',
+  tags: ['tourism', 'transport', 'aerospace', 'gateway'],
+  gravity: { food:0, knowledge:15, comfort:10, adventure:30, culture:20, nature:0 },
+  build_cost: { gold:2000, wood:100, stone:100, special:[] }, build_time: 7,
+  size: { w:2, h:2 }, max_workers: 2,
+  upkeep_per_day: { gold:30, food:0, energy:15 },
+  recipes: [], commercial: null,
+  effects: [{ type:'tourist_attraction', target:'global', value:1, description:'没有宇宙港就没有游客' }],
+  terrain_requirement: { required_terrain:null, required_adjacent:null, forbidden_adjacent:null },
+  unlock: { tech_required:'tech_space_comm', building_required:null, population_min:8, exploration_required:null },
+  level_max: 5, upgrades: [], unique: true,
+  special_rules: '全局唯一。游客的到达/离开点。',
+  flavor: { build_complete_text:'"这里是殖民地Alpha，我们开门营业了。"', idle_text:'雷达在安静地扫描天空。', busy_text:'一艘飞船正在降落！', combo_hint:'游客下飞船第一件事是找酒店。' }
+};
+
+const B_HOTEL = {
+  id: 'b_hotel', name: '酒店', category: 'tourism', subcategory: 'lodging',
+  tags: ['tourism', 'hospitality', 'comfort', 'lodging'],
+  gravity: { food:10, knowledge:0, comfort:70, adventure:0, culture:10, nature:5 },
+  build_cost: { gold:800, wood:60, stone:40, special:[] }, build_time: 4,
+  size: { w:1, h:1 }, max_workers: 2,
+  upkeep_per_day: { gold:15, food:5, energy:5 },
+  recipes: [],
+  commercial: { tourist_capacity:4, sells_product_types:[], base_price_modifier:1, visit_duration:3 },
+  effects: [{ type:'tourist_spending', target:'radius_3', value:10, description:'住了酒店的游客在附近多花10%' }],
+  terrain_requirement: { required_terrain:null, required_adjacent:null, forbidden_adjacent:null },
+  unlock: { tech_required:null, building_required:'b_spaceport', population_min:null, exploration_required:null },
+  level_max: 5, upgrades: [], unique: false,
+  flavor: { build_complete_text:'枕头软得章鱼星人的触手都陷进去了。', idle_text:'前台在擦柜台。', busy_text:'「欢迎光临~请问您有预约吗？」', combo_hint:'旁边有餐厅住客就不用走远吃饭。' }
+};
+
+const B_RESTAURANT = {
+  id: 'b_restaurant', name: '餐厅', category: 'commercial', subcategory: 'dining',
+  tags: ['food', 'commercial', 'hospitality', 'dining'],
+  gravity: { food:90, knowledge:0, comfort:50, adventure:0, culture:20, nature:0 },
+  build_cost: { gold:600, wood:40, stone:20, special:[] }, build_time: 3,
+  size: { w:1, h:1 }, max_workers: 2,
+  upkeep_per_day: { gold:10, food:0, energy:3 },
+  recipes: [],
+  commercial: { tourist_capacity:6, sells_product_types:['bread','cheese','star_sugar_toast','gourmet_meal'], base_price_modifier:1.5, visit_duration:4 },
+  effects: [],
+  terrain_requirement: { required_terrain:null, required_adjacent:null, forbidden_adjacent:null },
+  unlock: { tech_required:'tech_basic_cooking', building_required:null, population_min:null, exploration_required:null },
+  level_max: 5, upgrades: [], unique: false,
+  flavor: { build_complete_text:'菜单第一页只有一道菜。但这道菜很好吃。', idle_text:'厨师在磨刀。', busy_text:'「三号桌的星糖吐司好了！」', combo_hint:'旁边有面包工坊可以确保新鲜供应。' }
+};
+
+const B_SOUVENIR_SHOP = {
+  id: 'b_souvenir_shop', name: '特产店', category: 'commercial', subcategory: 'retail',
+  tags: ['commercial', 'souvenir', 'culture', 'retail'],
+  gravity: { food:10, knowledge:5, comfort:20, adventure:5, culture:60, nature:15 },
+  build_cost: { gold:500, wood:30, stone:20, special:[] }, build_time: 2,
+  size: { w:1, h:1 }, max_workers: 1,
+  upkeep_per_day: { gold:8, food:0, energy:2 },
+  recipes: [],
+  commercial: { tourist_capacity:4, sells_product_types:['perfume','crystal_craft','souvenir'], base_price_modifier:2.0, visit_duration:3 },
+  effects: [],
+  terrain_requirement: { required_terrain:null, required_adjacent:null, forbidden_adjacent:null },
+  unlock: { tech_required:null, building_required:null, population_min:null, exploration_required:null },
+  level_max: 3, upgrades: [], unique: false,
+  flavor: { build_complete_text:'货架有点空。但「本星球限定」标签贴好了。', idle_text:'店主在贴价签。', busy_text:'「这个是手工的！独一无二！……好吧有十二个一样的。」', combo_hint:'高级货利润好得多。' }
+};
+
+
+### 功能建筑（研究/军事/文化/装饰）
+
+
+const B_RESEARCH_LAB = {
+  id: 'b_research_lab', name: '研究所', category: 'research', subcategory: 'lab',
+  tags: ['research', 'knowledge', 'science', 'technology'],
+  gravity: { food:0, knowledge:80, comfort:5, adventure:10, culture:15, nature:5 },
+  build_cost: { gold:1200, wood:30, stone:50, special:[{ item_id:'crystal_shard', amount:3 }] }, build_time: 6,
+  size: { w:1, h:1 }, max_workers: 3,
+  upkeep_per_day: { gold:25, food:0, energy:12 },
+  recipes: [{
+    id: 'research_points', name: '研究点数', inputs: [],
+    output: { item_id:'research_points', base_amount:5 },
+    base_time: 6, output_tags: ['research'],
+    output_gravity: { food:0, knowledge:50, comfort:0, adventure:0, culture:10, nature:0 },
+    quality_factors: { worker_stat_weight:0.6, input_quality_weight:0, facility_level_weight:0.3, combo_bonus_weight:0.1 },
+    tech_required: null
+  }],
+  commercial: null, effects: [],
+  terrain_requirement: { required_terrain:null, required_adjacent:null, forbidden_adjacent:null },
+  unlock: { tech_required:null, building_required:null, population_min:5, exploration_required:null },
+  level_max: 5, upgrades: [], unique: false,
+  flavor: { build_complete_text:'零号搬了三台仪器进去。在你批准之前。', idle_text:'（白板上写满公式，一半被画了大叉）', busy_text:'「假设成立——不对，推倒重来。」', combo_hint:'图书馆可以加速研究。' }
+};
+
+const B_LIBRARY = {
+  id: 'b_library', name: '图书馆', category: 'research', subcategory: 'education',
+  tags: ['knowledge', 'culture', 'education', 'comfort'],
+  gravity: { food:0, knowledge:70, comfort:30, adventure:5, culture:40, nature:0 },
+  build_cost: { gold:700, wood:50, stone:30, special:[] }, build_time: 4,
+  size: { w:1, h:1 }, max_workers: 1,
+  upkeep_per_day: { gold:12, food:0, energy:3 },
+  recipes: [], commercial: null,
+  effects: [
+    { type:'research_speed', target:'radius_3', value:15, description:'周围3格研究所速度+15%' },
+    { type:'resident_mood', target:'radius_1', value:5, description:'安静环境让旁边居民心情+5' }
+  ],
+  terrain_requirement: { required_terrain:null, required_adjacent:null, forbidden_adjacent:null },
+  unlock: { tech_required:'tech_writing', building_required:null, population_min:null, exploration_required:null },
+  level_max: 5, upgrades: [], unique: false,
+  flavor: { build_complete_text:'第一批书只有三本。其中一本是零号的操作手册。', idle_text:'（翻页声……偶尔有人打喷嚏）', busy_text:'「嘘——这里是图书馆。」', combo_hint:'图书馆和研究所是经典搭配。加个学校呢？' }
+};
+
+const B_TRAINING_GROUND = {
+  id: 'b_training_ground', name: '训练场', category: 'military', subcategory: 'training',
+  tags: ['military', 'training', 'adventure', 'combat'],
+  gravity: { food:0, knowledge:5, comfort:0, adventure:70, culture:5, nature:10 },
+  build_cost: { gold:500, wood:50, stone:30, special:[] }, build_time: 3,
+  size: { w:2, h:1 }, max_workers: 0,
+  upkeep_per_day: { gold:10, food:0, energy:0 },
+  recipes: [], commercial: null,
+  effects: [{ type:'combat_boost', target:'global', value:10, description:'所有居民战斗力+10%' }],
+  special_rules: '居民空闲时自动前往训练，缓慢提升战斗属性',
+  terrain_requirement: { required_terrain:null, required_adjacent:null, forbidden_adjacent:null },
+  unlock: { tech_required:null, building_required:null, population_min:null, exploration_required:null },
+  level_max: 3, upgrades: [], unique: false,
+  flavor: { build_complete_text:'木桩靶子立好了。第一个上去劈的是……面包师？', idle_text:'靶子孤独地站着。', busy_text:'哈——嘿——哈——', combo_hint:'装备工坊可以提供更好的练习武器。' }
+};
+
+const B_PARK = {
+  id: 'b_park', name: '公园', category: 'decoration', subcategory: 'nature',
+  tags: ['decoration', 'nature', 'comfort', 'relaxation'],
+  gravity: { food:0, knowledge:0, comfort:40, adventure:0, culture:15, nature:55 },
+  build_cost: { gold:400, wood:30, stone:20, special:[] }, build_time: 2,
+  size: { w:1, h:1 }, max_workers: 0,
+  upkeep_per_day: { gold:5, food:0, energy:0 },
+  recipes: [], commercial: null,
+  effects: [
+    { type:'resident_mood', target:'radius_2', value:10, description:'周围居民心情+10' },
+    { type:'gravity_boost', target:'radius_2', value:8, gravity_dim:'nature', description:'周围自然引力+8' }
+  ],
+  terrain_requirement: { required_terrain:null, required_adjacent:null, forbidden_adjacent:null },
+  unlock: { tech_required:null, building_required:null, population_min:null, exploration_required:null },
+  level_max: 3, upgrades: [], unique: false,
+  flavor: { build_complete_text:'一棵树。一张长椅。一片让人可以发呆的草地。', idle_text:'（风吹过树叶的沙沙声）', busy_text:'有人在长椅上睡着了。', combo_hint:'公园旁边有喷泉可能有好事发生。' }
+};
+
+const B_FOUNTAIN = {
+  id: 'b_fountain', name: '喷泉', category: 'decoration', subcategory: 'art',
+  tags: ['decoration', 'water', 'aesthetic', 'relaxation', 'culture'],
+  gravity: { food:0, knowledge:0, comfort:35, adventure:0, culture:25, nature:20 },
+  build_cost: { gold:350, wood:0, stone:40, special:[] }, build_time: 2,
+  size: { w:1, h:1 }, max_workers: 0,
+  upkeep_per_day: { gold:3, food:0, energy:2 },
+  recipes: [], commercial: null,
+  effects: [{ type:'tourist_attraction', target:'radius_2', value:8, description:'周围商业吸引力+8%' }],
+  terrain_requirement: { required_terrain:null, required_adjacent:null, forbidden_adjacent:null },
+  unlock: { tech_required:null, building_required:null, population_min:null, exploration_required:null },
+  level_max: 3, upgrades: [], unique: false,
+  flavor: { build_complete_text:'水花在阳光下折射出彩虹。至少三个居民试图往里扔硬币。', idle_text:'（哗啦哗啦——）', busy_text:'有个小孩在喷泉边跑来跑去。', combo_hint:'喷泉和酒店、公园搭配效果拔群。' }
+};
+
+
+---
+
+# 第五部分：物品/产品系统
+
+---
+
+## 5.1 物品 Schema
+
+
+const ITEM_SCHEMA = {
+  id: String,
+  name: String,
+  category: String,        // 'raw_material'|'processed_material'|'food_product'|'luxury_product'|'equipment'|'buff_consumable'|'research_material'|'souvenir'
+  tags: [String],
+  gravity_appeal: {        // 该物品对六维引力的贡献
+    food: Number,
+    knowledge: Number,
+    comfort: Number,
+    adventure: Number,
+    culture: Number,
+    nature: Number
+  },
+  base_price: Number,
+  price_per_quality: Number,
+  shelf_life: Number|null, // 保质期（天），null=永久
+  stack_max: Number,
+  produced_by: [String],   // 可生产该物品的建筑ID
+  preferred_by_species: [String],
+  disliked_by_species: [String],
+  flavor_text: String
+};
+
+
+## 5.2 预设物品表
+
+
+const ITEMS = {
+  // ===== 原材料 Tier 0 =====
+  wheat:         { id:'wheat',         name:'小麦',     category:'raw_material',      base_price:5,   price_per_quality:1,  shelf_life:30,   stack_max:99, gravity_appeal:{ food:30, knowledge:0, comfort:0, adventure:0, culture:0, nature:20 } },
+  iron_ore:      { id:'iron_ore',      name:'铁矿石',   category:'raw_material',      base_price:8,   price_per_quality:2,  shelf_life:null, stack_max:99, gravity_appeal:{ food:0, knowledge:5, comfort:0, adventure:5, culture:0, nature:0 } },
+  wood:          { id:'wood',          name:'木材',     category:'raw_material',      base_price:4,   price_per_quality:1,  shelf_life:null, stack_max:99, gravity_appeal:{ food:0, knowledge:0, comfort:5, adventure:0, culture:0, nature:15 } },
+  stone:         { id:'stone',         name:'石材',     category:'raw_material',      base_price:3,   price_per_quality:1,  shelf_life:null, stack_max:99, gravity_appeal:{ food:0, knowledge:0, comfort:0, adventure:0, culture:5, nature:5 } },
+  milk:          { id:'milk',          name:'六腿牛奶', category:'raw_material',      base_price:6,   price_per_quality:2,  shelf_life:10,   stack_max:50, gravity_appeal:{ food:25, knowledge:0, comfort:10, adventure:0, culture:0, nature:10 } },
+  flower:        { id:'flower',        name:'星辰花',   category:'raw_material',      base_price:10,  price_per_quality:3,  shelf_life:7,    stack_max:50, gravity_appeal:{ food:0, knowledge:0, comfort:20, adventure:0, culture:15, nature:30 } },
+  crystal_shard: { id:'crystal_shard', name:'水晶碎片', category:'raw_material',      base_price:25,  price_per_quality:5,  shelf_life:null, stack_max:30, gravity_appeal:{ food:0, knowledge:15, comfort:10, adventure:5, culture:15, nature:10 } },
+  star_sugar:    { id:'star_sugar',    name:'星糖',     category:'raw_material',      base_price:20,  price_per_quality:5,  shelf_life:null, stack_max:30, gravity_appeal:{ food:40, knowledge:5, comfort:15, adventure:0, culture:10, nature:15 } },
+
+  // ===== 加工品 Tier 1 =====
+  iron_ingot:    { id:'iron_ingot',    name:'铁锭',     category:'processed_material', base_price:20,  price_per_quality:4,  shelf_life:null, stack_max:50, gravity_appeal:{ food:0, knowledge:10, comfort:0, adventure:10, culture:0, nature:0 } },
+
+  // ===== 成品 Tier 2 =====
+  bread:             { id:'bread',             name:'面包',     category:'food_product',   base_price:15,  price_per_quality:3,  shelf_life:5,    stack_max:30, gravity_appeal:{ food:60, knowledge:0, comfort:30, adventure:0, culture:5, nature:5 },  preferred_by_species:['species_squid'] },
+  cheese:            { id:'cheese',            name:'奶酪',     category:'food_product',   base_price:25,  price_per_quality:5,  shelf_life:15,   stack_max:20, gravity_appeal:{ food:55, knowledge:0, comfort:25, adventure:0, culture:20, nature:5 }, preferred_by_species:['species_crystal'] },
+  star_sugar_toast:  { id:'star_sugar_toast',  name:'星糖吐司', category:'food_product',   base_price:40,  price_per_quality:8,  shelf_life:3,    stack_max:15, gravity_appeal:{ food:85, knowledge:0, comfort:40, adventure:0, culture:20, nature:10 }, preferred_by_species:['species_squid','species_flora'] },
+  perfume:           { id:'perfume',           name:'星辰香水', category:'luxury_product', base_price:80,  price_per_quality:15, shelf_life:null, stack_max:10, gravity_appeal:{ food:0, knowledge:5, comfort:40, adventure:0, culture:50, nature:25 }, preferred_by_species:['species_flora','species_crystal'] },
+  iron_sword:        { id:'iron_sword',        name:'铁剑',     category:'equipment',      base_price:50,  price_per_quality:10, shelf_life:null, stack_max:10, gravity_appeal:{ food:0, knowledge:5, comfort:0, adventure:60, culture:10, nature:0 }, preferred_by_species:['species_mecha'] },
+};
+
+
+## 5.3 生产流程与品质计算
+
+
+function processProduction(building, gameState) {
+  const recipe = building.production.current_recipe;
+  if (!recipe) return;
+
+  // 1. 检查输入材料
+  for (const input of recipe.inputs) {
+    const available = building.production.input_buffer[input.item_id] || 0;
+    if (available < input.amount) {
+      // 尝试从全局仓库拉取
+      if ((gameState.resources[input.item_id] || 0) >= input.amount) {
+        gameState.resources[input.item_id] -= input.amount;
+        building.production.input_buffer[input.item_id] = (building.production.input_buffer[input.item_id] || 0) + input.amount;
+      } else {
+        return; // 材料不足，暂停
+      }
+    }
+  }
+
+  // 2. 计算生产速度
+  const workers = building.assigned_workers.map(id => gameState.residents[id]);
+  const avgWork = workers.reduce((s,w) => s + w.stats.work, 0) / Math.max(workers.length, 1);
+  const speedMod =
+    (1 + avgWork / 200) *
+    (1 + (building.level - 1) * 0.2) *
+    getTerrainBonus(building, gameState) *
+    getComboSpeedBonus(building, gameState) *
+    (gameState.season_effects?.farm_output || 1); // 季节加成（仅农业）
+
+  // 3. 推进进度
+  building.production.progress += (1 / recipe.base_time) * speedMod;
+
+  // 4. 完成
+  if (building.production.progress >= 1.0) {
+    building.production.progress = 0;
+
+    // 消耗材料
+    for (const input of recipe.inputs) {
+      building.production.input_buffer[input.item_id] -= input.amount;
+    }
+
+    // 计算品质
+    const quality = calculateProductQuality(recipe, workers, building, gameState);
+
+    // 生成产品实例
+    const product = {
+      id: generateUID(),
+      item_id: recipe.output.item_id,
+      name: recipe.name,
+      quality_tier: quality.tier,
+      quality_score: quality.score,
+      price_modifier: quality.priceMod,
+      gravity_tags: recipe.output_gravity,
+      produced_by: building.id,
+      produced_by_worker: workers[0]?.name || 'auto',
+      turn_produced: gameState.currentDay,
+      // AI异步填充
+      ai_name: null,
+      ai_description: null,
+      ai_special_trait: null,
+      ai_worker_comment: null
+    };
+
+    building.production.output_buffer.push(product);
+
+    // 异步请求AI生成产品描述
+    gameState.aiQueue.enqueue({
+      request_type: 'product_description',
+      priority: 4,
+      context: { product, worker: workers[0], building, season: gameState.currentSeason },
+      callback: (result) => {
+        product.ai_name = result.name;
+        product.ai_description = result.description;
+        product.ai_special_trait = result.special_traits;
+        product.ai_worker_comment = result.worker_comment;
+      }
+    });
+
+    gameState.eventBus.emit('product_completed', { product, building });
+  }
+}
+
+function calculateProductQuality(recipe, workers, building, gameState) {
+  const f = recipe.quality_factors;
+  const avgWork = workers.reduce((s,w) => s + w.stats.work, 0) / Math.max(workers.length, 1);
+
+  const workerScore = Math.min(avgWork / 100, 1.0) * f.worker_stat_weight;
+  const inputScore = 0.5 * f.input_quality_weight; // 简化：平均质量
+  const facilityScore = (building.level / 5) * f.facility_level_weight;
+  const comboScore = Math.min(getComboQualityBonus(building, gameState) / 100, 1.0) * f.combo_bonus_weight;
+
+  const moodBonus = workers.reduce((s,w) => s + (w.mood - 50) / 500, 0) / Math.max(workers.length, 1);
+  const random = 0.95 + Math.random() * 0.1;
+
+  const total = Math.min(100, Math.max(0,
+    (workerScore + inputScore + facilityScore + comboScore + moodBonus) * 100 * random
+  ));
+
+  let tier, priceMod;
+  if      (total >= 95) { tier = 'S';  priceMod = 2.5; }
+  else if (total >= 85) { tier = 'A+'; priceMod = 1.8; }
+  else if (total >= 70) { tier = 'A';  priceMod = 1.4; }
+  else if (total >= 50) { tier = 'B';  priceMod = 1.0; }
+  else if (total >= 30) { tier = 'C';  priceMod = 0.7; }
+  else                  { tier = 'D';  priceMod = 0.4; }
+
+  return { score: total, tier, priceMod };
+}
+
+
+---
+
+# 第六部分：居民系统
+
+---
+
+## 6.1 居民数据结构
+
+
+const Resident = {
+  id: String,
+  name: String,
+
+  stats: {
+    hp: { current: Number, max: Number },
+    work: Number,          // 1-100 劳动
+    explore: Number,       // 1-100 探索
+    combat: Number,        // 1-100 战斗
+    charisma: Number       // 1-100 魅力（商业建筑收入加成）
+  },
+
+  level: Number,
+  exp: Number,
+  exp_to_next: Number,
+
+  job: {
+    building_id: String|null,
+    role: String|null      // 'worker'|'researcher'|'guard'|'seller'
+  },
+
+  gravity_affinity: {      // 个人引力偏好（影响空闲行为和工作效率加成）
+    food: Number, knowledge: Number, comfort: Number,
+    adventure: Number, culture: Number, nature: Number
+  },
+
+  personality_tags: [String],
+  mood: Number,            // 0-100
+  mood_factors: {},
+
+  relationships: {
+    [resident_id]: { level: Number, tag: String }
+  },
+
+  equipment: { weapon: Object|null, armor: Object|null, accessory: Object|null },
+
+  position: { col: Number, row: Number },
+  state: String,           // 'idle'|'working'|'walking'|'exploring'|'resting'|'eating'|'shopping'|'socializing'|'training'
+  destination: { col: Number, row: Number }|null,
+
+  schedule: { work_hours: Number, rest_hours: Number, free_hours: Number },
+
+  home_building: String|null,
+
+  history: {
+    days_in_colony: Number,
+    products_made: Number,
+    best_quality: String,
+    battles_fought: Number,
+    notable_events: [{ day: Number, event: String }]
+  },
+
+  diary_history: [String]  // 最近5条日记摘要
+};
+
+
+## 6.2 性格标签与效果
+
+
+const PERSONALITY_EFFECTS = {
+  meticulous:    { product_quality: +10, production_speed: -10, description: '一丝不苟' },
+  sloppy:        { product_quality: -10, production_speed: +15, description: '随性' },
+  perfectionist: { special: 'S级概率+20%，但5%概率销毁产品', description: '完美主义' },
+  efficient:     { production_speed: +20, description: '高效' },
+  grumpy:        { relationship_growth: -30, relationship_stability: +50, description: '暴躁但忠诚' },
+  cheerful:      { nearby_mood: +5, description: '开朗' },
+  shy:           { solo_efficiency: +15, team_efficiency: -10, description: '害羞' },
+  leader:        { team_efficiency: +10, description: '领导者' },
+  secretly_kind: { special: '关系高时触发特殊事件', description: '嘴硬心软' },
+  night_owl:     { day_efficiency: -10, night_efficiency: +25, description: '夜猫子' },
+  foodie:        { food_mood_bonus: 2.0, description: '美食家' },
+  curious:       { explore_success: +15, description: '好奇' },
+  homebody:      { base_bonus: +10, explore_mood: -15, description: '宅' },
+  wanderer:      { explore_bonus: +15, idle_mood_decay: -5, description: '流浪者' }
+};
+
+
+## 6.3 居民行为
+
+
+function updateResidentBehavior(resident, gameState) {
+  const hour = gameState.currentHour;
+
+  // 日程分配
+  if (hour >= 6 && hour < 6 + resident.schedule.work_hours) {
+    // 工作时间
+    if (resident.state !== 'working' && resident.job.building_id) {
+      moveTo(resident, resident.job.building_id, gameState);
+    }
+  } else if (hour >= 14 && hour < 14 + resident.schedule.free_hours) {
+    // 自由时间：根据引力偏好选择去处
+    if (resident.state === 'working' || resident.state === 'idle') {
+      const dest = chooseLeisureDestination(resident, gameState);
+      if (dest) moveTo(resident, dest, gameState);
+    }
+  } else {
+    // 休息
+    if (resident.state !== 'resting' && resident.home_building) {
+      moveTo(resident, resident.home_building, gameState);
+    }
+  }
+}
+
+function chooseLeisureDestination(resident, gameState) {
+  const candidates = gameState.buildings.filter(b =>
+    ['commercial','decoration','tourism'].includes(BUILDING_TEMPLATES[b.type_id].category) &&
+    b.is_active
+  );
+
+  let best = null, bestScore = -1;
+  for (const b of candidates) {
+    const gravity = calculateTileGravityField(b.col, b.row, gameState);
+    let score = calculateAttraction(resident.gravity_affinity, gravity);
+    const dist = manhattanDistance(resident.position, b);
+    score *= (1 / (1 + dist * 0.15));
+    if (score > bestScore) { bestScore = score; best = b; }
+  }
+  return best?.id || resident.home_building;
+}
+
+function gainExp(resident, amount) {
+  resident.exp += amount;
+  while (resident.exp >= resident.exp_to_next) {
+    resident.exp -= resident.exp_to_next;
+    resident.level++;
+    resident.exp_to_next = Math.floor(resident.exp_to_next * 1.3);
+    // 属性成长（根据当前工作类型）
+    const growth = JOB_GROWTH[resident.job.role] || JOB_GROWTH.worker;
+    for (const [stat, val] of Object.entries(growth)) {
+      resident.stats[stat] += val + Math.floor(Math.random() * 3);
+    }
+  }
+}
+
+const JOB_GROWTH = {
+  worker:     { work:5, explore:1, combat:1, charisma:1 },
+  researcher: { work:2, explore:1, combat:0, charisma:1 },
+  guard:      { work:1, explore:2, combat:7, charisma:0 },
+  seller:     { work:3, explore:0, combat:0, charisma:5 },
+};
+
+
+---
+
+# 第七部分：外星种族与游客系统
+
+---
+
+## 7.1 种族 Schema
+
+
+const SPECIES_SCHEMA = {
+  id: String,
+  name: String,
+  home_world: String,
+  gravity_preference: {
+    food: Number, knowledge: Number, comfort: Number,
+    adventure: Number, culture: Number, nature: Number
+  },
+  traits: {
+    avg_budget: Number,
+    budget_variance: Number,
+    group_size_range: [Number, Number],
+    visit_frequency: Number,       // 每N天来一次
+    patience: Number,              // 1-10
+    social_media_influence: Number // 1-10
+  },
+  reputation: {
+    current: Number,
+    tier_thresholds: { acquainted:30, friendly:60, allied:100 },
+    tier_rewards: {
+      acquainted: Object,
+      friendly: Object,
+      allied: Object
+    }
+  },
+  lore: {
+    appearance: String,
+    culture_summary: String,
+    fun_fact: String,
+    greeting_style: String
+  },
+  personality_pool: [String],      // 生成个体游客时可用的性格标签
+  sprite_base_color: String,
+  sprite_features: String
+};
+
+
+## 7.2 预设种族
+
+
+const SPECIES = {
+  species_squid: {
+    id:'species_squid', name:'章鱼星人', home_world:'深海星-9号',
+    gravity_preference: { food:90, knowledge:20, comfort:60, adventure:10, culture:40, nature:30 },
+    traits: { avg_budget:3000, budget_variance:1000, group_size_range:[2,5], visit_frequency:7, patience:4, social_media_influence:9 },
+    reputation: { current:0,
+      tier_thresholds: { acquainted:30, friendly:60, allied:100 },
+      tier_rewards: {
+        acquainted: { type:'recipe', id:'tentacle_stew', description:'章鱼分享了一道……食谱' },
+        friendly: { type:'building', id:'underwater_lounge', description:'水下休息室解锁！' },
+        allied: { type:'immigrant', description:'一位章鱼星人申请永久居留' }
+      }
+    },
+    lore: {
+      appearance: '1.2米高，八条触手，头顶变色大眼睛',
+      culture_summary: '全民美食博主文明，社交媒体渗透率100%',
+      fun_fact: '每条触手各有独立味觉感受器，理论上可同时品尝八道菜',
+      greeting_style: '用三条触手同时握手'
+    },
+    personality_pool: ['foodie','photographer','loud','bargain_hunter','adventurous_eater','critic'],
+    sprite_base_color:'#FF7B9C', sprite_features:'粉色圆身，八条小触手，两只大眼睛'
+  },
+
+  species_crystal: {
+    id:'species_crystal', name:'水晶星人', home_world:'棱光星',
+    gravity_preference: { food:15, knowledge:85, comfort:30, adventure:20, culture:70, nature:40 },
+    traits: { avg_budget:5000, budget_variance:2000, group_size_range:[1,3], visit_frequency:14, patience:9, social_media_influence:3 },
+    reputation: { current:0,
+      tier_thresholds: { acquainted:30, friendly:60, allied:100 },
+      tier_rewards: {
+        acquainted: { type:'tech', id:'crystal_resonance', description:'水晶共振技术——研究+15%' },
+        friendly: { type:'building', id:'crystal_gallery', description:'水晶艺廊解锁！' },
+        allied: { type:'immigrant', description:'一位水晶学者成为你的顾问' }
+      }
+    },
+    lore: {
+      appearance: '透明人形结晶体，内部有流动光纹，说话时折射彩虹',
+      culture_summary: '追求知识与审美的古老文明，认为最高艺术是数学证明',
+      fun_fact: '靠光合作用存活。出于礼仪会"品鉴"食物——让食物在体内折射不同颜色来评判品质',
+      greeting_style: '微微倾斜身体使光线折射出特定色谱——相当于微笑'
+    },
+    personality_pool: ['scholar','collector','quiet','meticulous','art_lover','mathematician'],
+    sprite_base_color:'#C8BFE7', sprite_features:'半透明菱形身体，内部流动光纹'
+  },
+
+  species_mecha: {
+    id:'species_mecha', name:'机甲族', home_world:'铆钉星-MKIV',
+    gravity_preference: { food:5, knowledge:50, comfort:10, adventure:80, culture:15, nature:5 },
+    traits: { avg_budget:2000, budget_variance:500, group_size_range:[1,2], visit_frequency:10, patience:7, social_media_influence:5 },
+    reputation: { current:0,
+      tier_thresholds: { acquainted:30, friendly:60, allied:100 },
+      tier_rewards: {
+        acquainted: { type:'tech', id:'automation_lv1', description:'基础自动化——工厂+10%' },
+        friendly: { type:'building', id:'mecha_arena', description:'机甲竞技场解锁！' },
+        allied: { type:'immigrant', description:'一台退役机甲申请……安度晚年？' }
+      }
+    },
+    lore: {
+      appearance: '1.8米人形机甲，内部"驾驶员"只有15厘米的小生物',
+      culture_summary: '小体型种族通过机甲外骨骼与宇宙互动',
+      fun_fact: '机甲可以变形为载具模式。但变形需要45分钟所以几乎从不变形',
+      greeting_style: '胸甲打开一条缝，露出里面的小生物挥了挥手，然后立刻关上'
+    },
+    personality_pool: ['engineer','competitive','stoic','collector','battle_enthusiast'],
+    sprite_base_color:'#7F8C8D', sprite_features:'方正机甲外形，关节有铆钉，胸口小窗户'
+  },
+
+  species_flora: {
+    id:'species_flora', name:'花灵族', home_world:'常春藤星',
+    gravity_preference: { food:30, knowledge:20, comfort:50, adventure:5, culture:35, nature:95 },
+    traits: { avg_budget:1500, budget_variance:800, group_size_range:[3,8], visit_frequency:12, patience:10, social_media_influence:6 },
+    reputation: { current:0,
+      tier_thresholds: { acquainted:30, friendly:60, allied:100 },
+      tier_rewards: {
+        acquainted: { type:'tech', id:'advanced_botany', description:'高级植物学——农田产出+25%' },
+        friendly: { type:'building', id:'greenhouse_dome', description:'温室穹顶解锁！' },
+        allied: { type:'immigrant', description:'一位花灵族园艺大师愿意扎根' }
+      }
+    },
+    lore: {
+      appearance: '60-120cm植物形态生物，头部开着不同花朵，花型代表家族',
+      culture_summary: '光合文明，以"扎根"表示定居承诺——最高信任宣言',
+      fun_fact: '通过花粉频率交流。殖民地的花田让他们觉得亲切——虽然那些花"说"的都是自然噪音',
+      greeting_style: '花朵朝向你转动——注视礼'
+    },
+    personality_pool: ['gentle','botanical_expert','shy','patient','eco_sensitive','poetic'],
+    sprite_base_color:'#A8D8B9', sprite_features:'小巧绿色身体，头顶一朵花，走路时叶子摆动'
+  }
+};
+
+
+## 7.3 游客到访与行为
+
+
+function checkTouristArrival(gameState) {
+  if (!gameState.buildings.some(b => b.type_id === 'b_spaceport')) return; // 没宇宙港不来
+
+  for (const species of Object.values(gameState.knownSpecies)) {
+    const template = SPECIES[species.id];
+    const daysSince = gameState.currentDay - (species.lastVisitDay || 0);
+    const interval = Math.max(3, template.traits.visit_frequency * (1 - species.reputation.current / 200));
+
+    if (daysSince >= interval) {
+      const groupSize = randomInRange(...template.traits.group_size_range);
+      const budget = template.traits.avg_budget + (Math.random() - 0.5) * 2 * template.traits.budget_variance;
+
+      // 请求AI生成游客团
+      gameState.aiQueue.enqueue({
+        request_type: 'tourist_generation',
+        priority: 2,
+        context: {
+          species: template,
+          group_size: groupSize,
+          total_budget: Math.round(budget),
+          colony_gravity: calculateColonyOverallGravity(gameState),
+          available_products: getAvailableProductTypes(gameState),
+          season: gameState.currentSeason
+        },
+        callback: (result) => spawnTouristGroup(result, gameState)
+      });
+
+      species.lastVisitDay = gameState.currentDay;
+    }
+  }
+}
+
+function decideTouristRoute(tourist, gameState) {
+  const destinations = gameState.buildings.filter(b => {
+    const tmpl = BUILDING_TEMPLATES[b.type_id];
+    return tmpl.commercial && b.is_active;
+  });
+
+  const scored = destinations.map(dest => {
+    const gravity = calculateTileGravityField(dest.col, dest.row, gameState);
+    let score = calculateAttraction(tourist.gravity_preference, gravity);
+    const dist = manhattanDistance(gameState.spaceport_pos, dest);
+    score *= (1 / (1 + dist * 0.1));
+    return { building: dest, score };
+  });
+
+  scored.sort((a,b) => b.score - a.score);
+  return scored.slice(0, Math.min(5, scored.length));
+}
+
+function touristConsume(tourist, building, product, gameState) {
+  let price = product.base_price * product.price_modifier;
+  price *= building.commercial?.base_price_modifier || 1;
+
+  // 引力匹配溢价
+  const attraction = calculateAttraction(tourist.gravity_preference, product.gravity_tags);
+  price *= (1 + attraction / 200);
+
+  // 组合加成
+  price *= (1 + getComboBonus(building, 'tourist_spending', gameState) / 100);
+
+  // 种族偏好
+  if (product.preferred_by_species?.includes(tourist.species_id)) price *= 1.3;
+  if (product.disliked_by_species?.includes(tourist.species_id)) price *= 0.5;
+
+  const finalPrice = Math.round(price);
+  if (finalPrice > tourist.remaining_budget * 1.2) return { purchased: false };
+
+  tourist.remaining_budget -= finalPrice;
+  gameState.resources.gold += finalPrice;
+
+  return {
+    purchased: true,
+    price_paid: finalPrice,
+    satisfaction: Math.round(attraction / 10),
+    reputation_gain: Math.ceil(finalPrice / 100)
+  };
+}
+
+
+---
+
+# 第八部分：组合系统（AI判定核心接口）
+
+---
+
+## 8.1 触发逻辑
+
+
+function onBuildingPlaced(building, gameState) {
+  const nearby = getBuildingsInRadius(building.col, building.row, 2, gameState);
+  if (nearby.length < 1) return;
+
+  const tagOverlap = countTagOverlaps(
+    BUILDING_TEMPLATES[building.type_id].tags,
+    nearby.map(b => BUILDING_TEMPLATES[b.type_id].tags)
+  );
+
+  if (tagOverlap >= 2) {
+    gameState.aiQueue.enqueue({
+      request_type: 'combo_check',
+      priority: 2,
+      context: {
+        new_building: {
+          id: building.id,
+          type: building.type_id,
+          category: BUILDING_TEMPLATES[building.type_id].category,
+          tags: BUILDING_TEMPLATES[building.type_id].tags,
+          level: building.level,
+          gravity: BUILDING_TEMPLATES[building.type_id].gravity
+        },
+        adjacent_buildings: nearby.map(b => ({
+          id: b.id,
+          type: b.type_id,
+          category: BUILDING_TEMPLATES[b.type_id].category,
+          tags: BUILDING_TEMPLATES[b.type_id].tags,
+          level: b.level,
+          distance: manhattanDistance(building, b)
+        })),
+        existing_combos: gameState.activeCombos.map(c => c.id),
+        colony_dominant_gravity: getDominantGravity(gameState),
+        season: gameState.currentSeason
+      },
+      callback: (result) => {
+        if (result.combo_detected) applyCombo(result.combo, gameState);
+        if (result.near_miss_hint) showHint(result.near_miss_hint);
+      }
+    });
+  }
+}
+
+
+## 8.2 组合输出 Schema
+
+
+{
+  "combo_detected": true,
+  "combo": {
+    "id": "perfumed_paradise",
+    "name": "芳香乐园",
+    "tier": 2,
+    "participating_buildings": ["b_perfume_workshop_3", "b_flower_farm_1", "b_hotel_2", "b_fountain_1"],
+    "bonuses": [
+      { "type": "tourist_spending", "target": "radius_3", "value": 25, "description": "游客被香气吸引，消费+25%" },
+      { "type": "product_quality", "target": "self", "value": 15, "description": "新鲜花卉供应链极短，品质+15%" },
+      { "type": "resident_mood", "target": "radius_3", "value": 10, "description": "花香弥漫，居民心情+10" }
+    ],
+    "gravity_bonus": { "food":0, "knowledge":0, "comfort":10, "adventure":0, "culture":8, "nature":12 },
+    "flavor_text": "花田芬芳经工坊提炼，随喷泉水雾弥散。住酒店的章鱼星人把触手全张开深呼吸，一口气买了十二瓶——八瓶同一个味道。",
+    "unlock_hint": "如果加一个露天咖啡馆，也许会触发更高级的组合……"
+  }
+}
+
+
+数值约束写在 System Prompt 中：
+- Tier 1（2建筑）：单项 5-15%
+- Tier 2（3-4建筑）：单项 15-35%
+- Tier 3（5+建筑）：单项 30-50%
+- 引力加成总和：Tier1≤10, Tier2≤20, Tier3≤30
+
+---
+
+# 第九部分：科技研究系统
+
+---
+
+## 9.1 科技 Schema
+
+
+const TECH_SCHEMA = {
+  id: String,
+  name: String,
+  category: String,            // 'food_tech'|'material_tech'|'exploration_tech'|'military_tech'|'social_tech'|'special_tech'
+  tier: Number,                // 1-5
+  gravity_category: { primary: String, secondary: String|null },
+  cost: { research_points: Number, gold: Number, materials: [{ item_id:String, amount:Number }] },
+  research_time: Number,       // 天
+  prerequisites: [String],
+  unlocks: { buildings:[String], recipes:[String], abilities:[String], upgrades:[String] },
+  passive_effect: Object|null,
+  global_gravity_bonus: { food:Number, knowledge:Number, comfort:Number, adventure:Number, culture:Number, nature:Number },
+  flavor_text: String,
+  completion_text: String
+};
+
+
+## 9.2 预设科技树
+
+
+const TECH_TREE = {
+  // ===== Tier 1 =====
+  tech_basic_cooking:     { id:'tech_basic_cooking', name:'基础烹饪', category:'food_tech', tier:1, gravity_category:{primary:'food',secondary:null}, cost:{research_points:50,gold:200,materials:[]}, research_time:3, prerequisites:[], unlocks:{buildings:['b_bakery','b_restaurant'],recipes:['bread'],abilities:[],upgrades:[]}, passive_effect:null, global_gravity_bonus:{food:2,knowledge:0,comfort:0,adventure:0,culture:0,nature:0}, flavor_text:'从"能吃"进化到"好吃"。', completion_text:'殖民地终于不用啃生小麦了。' },
+
+  tech_basic_mining:      { id:'tech_basic_mining', name:'基础采矿', category:'material_tech', tier:1, gravity_category:{primary:'adventure',secondary:'knowledge'}, cost:{research_points:60,gold:300,materials:[]}, research_time:4, prerequisites:[], unlocks:{buildings:['b_mine'],recipes:[],abilities:['mine_rocky'],upgrades:[]}, passive_effect:null, global_gravity_bonus:{food:0,knowledge:1,comfort:0,adventure:2,culture:0,nature:0}, flavor_text:'敲石头也是一门学问。', completion_text:'矿场可以建造了。矿工们摩拳擦掌。' },
+
+  tech_writing:           { id:'tech_writing', name:'文字记录', category:'social_tech', tier:1, gravity_category:{primary:'knowledge',secondary:'culture'}, cost:{research_points:40,gold:150,materials:[]}, research_time:2, prerequisites:[], unlocks:{buildings:['b_library'],recipes:[],abilities:[],upgrades:[]}, passive_effect:null, global_gravity_bonus:{food:0,knowledge:2,comfort:0,adventure:0,culture:1,nature:0}, flavor_text:'把想法写下来这样就不会忘了。', completion_text:'图书馆解锁。第一本入馆藏书是零号的操作手册。' },
+
+  tech_construction:      { id:'tech_construction', name:'建筑改良', category:'social_tech', tier:1, gravity_category:{primary:'comfort',secondary:null}, cost:{research_points:40,gold:200,materials:[{item_id:'wood',amount:20}]}, research_time:3, prerequisites:[], unlocks:{buildings:['b_cottage'],recipes:[],abilities:[],upgrades:[]}, passive_effect:null, global_gravity_bonus:{food:0,knowledge:0,comfort:2,adventure:0,culture:0,nature:0}, flavor_text:'四面墙加一个屋顶。升级版。', completion_text:'小屋解锁。从帐篷到小屋——文明的每一步都值得庆祝。' },
+
+  // ===== Tier 2 =====
+  tech_animal_husbandry:  { id:'tech_animal_husbandry', name:'畜牧学', category:'food_tech', tier:2, gravity_category:{primary:'food',secondary:'nature'}, cost:{research_points:80,gold:400,materials:[{item_id:'wheat',amount:20}]}, research_time:5, prerequisites:['tech_basic_cooking'], unlocks:{buildings:['b_ranch'],recipes:['milk','leather'],abilities:[],upgrades:[]}, passive_effect:null, global_gravity_bonus:{food:3,knowledge:0,comfort:0,adventure:0,culture:0,nature:2}, flavor_text:'六条腿的牛。一切皆有可能。', completion_text:'牧场解锁。那头六腿牛用三双眼睛盯着你看了很久。' },
+
+  tech_metallurgy:        { id:'tech_metallurgy', name:'冶金学', category:'material_tech', tier:2, gravity_category:{primary:'knowledge',secondary:'adventure'}, cost:{research_points:150,gold:600,materials:[{item_id:'iron_ore',amount:15}]}, research_time:6, prerequisites:['tech_basic_mining'], unlocks:{buildings:['b_smelter'],recipes:['iron_ingot'],abilities:[],upgrades:[]}, passive_effect:null, global_gravity_bonus:{food:0,knowledge:3,comfort:0,adventure:2,culture:0,nature:0}, flavor_text:'把石头变成金属。', completion_text:'冶炼厂解锁。第一滴铁水流出来时，有人轻轻说了句脏话。不是骂人的那种。' },
+
+  tech_space_comm:        { id:'tech_space_comm', name:'星际通讯', category:'social_tech', tier:2, gravity_category:{primary:'knowledge',secondary:'culture'}, cost:{research_points:120,gold:800,materials:[{item_id:'iron_ingot',amount:5}]}, research_time:7, prerequisites:['tech_basic_mining'], unlocks:{buildings:['b_spaceport'],recipes:[],abilities:['contact_aliens'],upgrades:[]}, passive_effect:null, global_gravity_bonus:{food:0,knowledge:2,comfort:0,adventure:2,culture:2,nature:0}, flavor_text:'对着星空喊"谁在那儿"——用无线电波。', completion_text:'宇宙港可以建造了！建好后你的星球正式对银河系开放。' },
+
+  tech_botany:            { id:'tech_botany', name:'植物学', category:'food_tech', tier:2, gravity_category:{primary:'nature',secondary:'knowledge'}, cost:{research_points:90,gold:350,materials:[]}, research_time:4, prerequisites:['tech_basic_cooking'], unlocks:{buildings:['b_flower_farm'],recipes:['flower'],abilities:['identify_plants'],upgrades:[]}, passive_effect:null, global_gravity_bonus:{food:0,knowledge:1,comfort:0,adventure:0,culture:0,nature:3}, flavor_text:'不是所有花都能吃。第一课。', completion_text:'花田解锁。这颗星球的花颜色特别鲜艳。' },
+
+  tech_fermentation:      { id:'tech_fermentation', name:'发酵学', category:'food_tech', tier:2, gravity_category:{primary:'food',secondary:'knowledge'}, cost:{research_points:100,gold:400,materials:[{item_id:'milk',amount:10}]}, research_time:5, prerequisites:['tech_animal_husbandry'], unlocks:{buildings:['b_cheese_workshop'],recipes:['cheese'],abilities:[],upgrades:[]}, passive_effect:null, global_gravity_bonus:{food:3,knowledge:1,comfort:0,adventure:0,culture:1,nature:0}, flavor_text:'让微生物替你工作。效率的终极形态。', completion_text:'奶酪工坊解锁。味道……先等三天再评价。' },
+
+  // ===== Tier 3 =====
+  tech_smithing:          { id:'tech_smithing', name:'锻造术', category:'material_tech', tier:3, gravity_category:{primary:'adventure',secondary:'knowledge'}, cost:{research_points:200,gold:800,materials:[{item_id:'iron_ingot',amount:10}]}, research_time:7, prerequisites:['tech_metallurgy'], unlocks:{buildings:['b_equipment_workshop'],recipes:['iron_sword','iron_shield'],abilities:[],upgrades:[]}, passive_effect:null, global_gravity_bonus:{food:0,knowledge:1,comfort:0,adventure:3,culture:1,nature:0}, flavor_text:'锤子、铁砧、火焰。最古老的创造仪式。', completion_text:'装备工坊解锁。第一柄铁剑——更像长一点的黄油刀，但它是铁的。' },
+
+  tech_chemistry:         { id:'tech_chemistry', name:'化学', category:'material_tech', tier:3, gravity_category:{primary:'knowledge',secondary:'comfort'}, cost:{research_points:180,gold:700,materials:[{item_id:'crystal_shard',amount:3}]}, research_time:7, prerequisites:['tech_botany','tech_metallurgy'], unlocks:{buildings:['b_perfume_workshop'],recipes:['perfume'],abilities:[],upgrades:[]}, passive_effect:null, global_gravity_bonus:{food:0,knowledge:2,comfort:2,adventure:0,culture:2,nature:0}, flavor_text:'把一朵花变成一滴永恒的气味。', completion_text:'香水工坊解锁。调香师说每瓶香水都是液态的诗。矿工说闻不出区别。' },
+
+  tech_advanced_baking:   { id:'tech_advanced_baking', name:'高级烘焙术', category:'food_tech', tier:3, gravity_category:{primary:'food',secondary:'knowledge'}, cost:{research_points:200,gold:1000,materials:[{item_id:'wheat',amount:50}]}, research_time:5, prerequisites:['tech_basic_cooking','tech_fermentation'], unlocks:{buildings:[],recipes:['star_sugar_toast','artisan_bread'],abilities:[],upgrades:[{building:'b_bakery',max_level:+1}]}, passive_effect:null, global_gravity_bonus:{food:3,knowledge:0,comfort:1,adventure:0,culture:1,nature:0}, flavor_text:'深入研究面粉与热量的关系。', completion_text:'高级配方解锁。汉克揉面的节奏暗合了小麦蛋白质的分子振动频率。这不是玄学。大概。' },
+
+  // ===== Tier 4（示例，AI可继续扩展） =====
+  tech_automation_lv1:    { id:'tech_automation_lv1', name:'基础自动化', category:'material_tech', tier:4, gravity_category:{primary:'knowledge',secondary:'comfort'}, cost:{research_points:250,gold:1200,materials:[{item_id:'iron_ingot',amount:20}]}, research_time:10, prerequisites:['tech_smithing','tech_chemistry'], unlocks:{buildings:[],recipes:[],abilities:[],upgrades:['all_processing_speed_+15%']}, passive_effect:{type:'production_speed',target:'all_processing',value:15}, global_gravity_bonus:{food:0,knowledge:3,comfort:2,adventure:0,culture:0,nature:0}, flavor_text:'让机器替人做重复的事。', completion_text:'工厂里出现了传送带。汉克看着面团自动被送进烤箱，沉默了很久："……我还是自己揉。"' }
+};
+
+
+---
+
+# 第十部分：探索系统
+
+---
+
+## 10.1 探索区域
+
+
+const EXPLORATION_REGIONS = [
+  { id:'region_green_valley', name:'翠谷地带', biome:'grassland', danger_level:1, gravity_theme:{primary:'nature',secondary:'food'}, distance:1, nodes:8, unlock:null, description:'殖民地周边温和草原。' },
+  { id:'region_iron_ridge', name:'铁脊山脉', biome:'mountain', danger_level:2, gravity_theme:{primary:'adventure',secondary:'knowledge'}, distance:2, nodes:6, unlock:'region_green_valley_50%', description:'裸露矿脉在阳光下闪光。' },
+  { id:'region_crystal_caves', name:'谐振晶洞', biome:'underground', danger_level:3, gravity_theme:{primary:'knowledge',secondary:'culture'}, distance:3, nodes:10, unlock:'tech_metallurgy', description:'地底水晶簇会嗡鸣。越深越复杂。' },
+  { id:'region_scorched_plains', name:'灼原', biome:'volcanic', danger_level:4, gravity_theme:{primary:'adventure',secondary:'nature'}, distance:4, nodes:8, unlock:'region_iron_ridge_100%', description:'地热蒸汽从裂缝喷出。' },
+  { id:'region_ancient_ruins', name:'先行者遗迹', biome:'ruins', danger_level:5, gravity_theme:{primary:'culture',secondary:'knowledge'}, distance:5, nodes:12, unlock:'tech_advanced_archaeology', description:'不属于任何已知文明的建筑残骸。' }
+];
+
+
+## 10.2 战斗系统（极简回合制）
+
+
+function executeBattle(party, enemies) {
+  const allUnits = [
+    ...party.map(r => ({ ...r, team:'player', alive:true })),
+    ...enemies.map(e => ({ ...e, team:'enemy', alive:true }))
+  ];
+  allUnits.sort((a,b) => (b.stats?.speed||50) - (a.stats?.speed||50));
+
+  const log = [];
+  let round = 0;
+
+  while (allUnits.some(u => u.team==='player' && u.alive) &&
+         allUnits.some(u => u.team==='enemy' && u.alive) &&
+         round < 50) {
+    round++;
+    for (const unit of allUnits) {
+      if (!unit.alive) continue;
+      const targets = allUnits.filter(u => u.team !== unit.team && u.alive);
+      if (targets.length === 0) break;
+      const target = targets.reduce((a,b) => a.stats.hp.current < b.stats.hp.current ? a : b);
+      const damage = Math.max(1, unit.stats.combat - Math.floor((target.stats.combat||0)*0.3) + Math.floor(Math.random()*10)-5);
+      target.stats.hp.current -= damage;
+      if (target.stats.hp.current <= 0) { target.alive = false; target.stats.hp.current = 0; }
+      log.push({ round, attacker:unit.name, target:target.name, damage, defeated:!target.alive });
+    }
+  }
+
+  return {
+    victory: allUnits.some(u => u.team==='player' && u.alive),
+    rounds: round, log,
+    survivors: allUnits.filter(u => u.team==='player').map(u => ({ id:u.id, hp:u.stats.hp.current })),
+    loot: allUnits.some(u => u.team==='player' && u.alive) ? generateLoot(enemies) : []
+  };
+}
+
+
+---
+
+# 第十一部分：事件系统
+
+---
+
+## 11.1 触发规则
+
+
+const EVENT_TRIGGERS = {
+  seasonal: {
+    spring_festival: { season:'spring', day:15 },
+    summer_star_shower: { season:'summer', day:20 },
+    autumn_harvest: { season:'autumn', day:25 },
+    winter_solstice: { season:'winter', day:15 }
+  },
+  milestone: {
+    first_tourist: 'total_tourists >= 1',
+    population_10: 'population >= 10',
+    population_20: 'population >= 20',
+    first_combo: 'combos >= 1',
+    first_s_product: 'best_quality >= S'
+  },
+  random: {
+    daily_chance: 0.05,
+    pool_by_year: {
+      1: ['wandering_merchant','minor_weather','resident_request'],
+      2: ['rare_merchant','moderate_weather','resident_personal','alien_scout'],
+      3: ['legendary_merchant','major_weather','resident_crisis','alien_delegation','anomaly_pulse']
+    }
+  }
+};
+
+
+## 11.2 事件 Schema（AI生成时遵循）
+
+
+const EVENT_SCHEMA = {
+  id: String, name: String,
+  type: String, // 'seasonal'|'milestone'|'random'|'personal'|'exploration'
+  gravity_theme: { primary:String, secondary:String|null },
+  description: String,
+  choices: [{
+    id: String, text: String,
+    check: { type:String, target:String, threshold:Number }|null,
+    success: { narrative:String, rewards:Object },
+    failure: { narrative:String, consequences:Object }|null
+  }],
+  auto_effect: Object|null,
+  follow_up: { event_id:String, delay_days:Number, condition:String }|null
+};
+
+
+---
+
+# 第十二部分：AI通信统一接口
+
+---
+
+## 12.1 请求类型汇总
+
+| 类型 | 触发 | 优先级 | 阻塞 | 缓存 | Fallback |
+|------|------|--------|------|------|---------|
+| `combo_check` | 建筑放置 | 2 | 否 | 建筑组合键 | 预设组合表 |
+| `product_description` | 产品完成 | 4 | 否 | 配方+品质组合 | 通用描述 |
+| `tourist_generation` | 游客到访 | 2 | 半阻塞 | 否 | 预设模板 |
+| `tourist_comment` | 游客消费后 | 5 | 否 | 否 | 通用评语 |
+| `exploration_event` | 探索节点 | 1 | 是 | 否 | 预设事件库 |
+| `resident_diary` | 日结算/点击 | 5 | 否 | 居民+日事件 | 通用日记 |
+| `random_event` | 每日检查 | 2 | 是 | 否 | 预设事件 |
+| `annual_review` | 年终 | 1 | 是 | 否 | 模板评语 |
+| `tech_generation` | 特殊条件 | 2 | 半阻塞 | 否 | 不生成 |
+| `building_generation` | 特殊条件 | 2 | 半阻塞 | 否 | 不生成 |
+| `species_generation` | 探索发现 | 2 | 半阻塞 | 否 | 不生成 |
+
+## 12.2 请求队列
+
+
+class AIRequestQueue {
+  constructor(apiKey, maxConcurrent = 2) {
+    this.queue = [];
+    this.processing = 0;
+    this.maxConcurrent = maxConcurrent;
+    this.apiKey = apiKey;
+    this.cache = new Map();
+    this.fallbacks = {};
+  }
+
+  enqueue(request) {
+    const cacheKey = this.getCacheKey(request);
+    if (cacheKey && this.cache.has(cacheKey)) {
+      request.callback(this.cache.get(cacheKey));
+      return;
+    }
+    const idx = this.queue.findIndex(r => r.priority > request.priority);
+    if (idx === -1) this.queue.push(request);
+    else this.queue.splice(idx, 0, request);
+    this.processNext();
+  }
+
+  async processNext() {
+    if (this.processing >= this.maxConcurrent || this.queue.length === 0) return;
+    this.processing++;
+    const req = this.queue.shift();
+    try {
+      const systemPrompt = this.getSystemPrompt(req.request_type);
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json', 'x-api-key':this.apiKey, 'anthropic-version':'2023-06-01' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: req.max_tokens || 1000,
+          system: systemPrompt,
+          messages: [{ role:'user', content:JSON.stringify(req.context) }]
+        })
+      });
+      const data = await res.json();
+      const parsed = JSON.parse(data.content[0].text);
+      if (this.validate(parsed, req.request_type)) {
+        const cacheKey = this.getCacheKey(req);
+        if (cacheKey) this.cache.set(cacheKey, parsed);
+        req.callback(parsed);
+      } else {
+        req.callback(this.fallbacks[req.request_type] || {});
+      }
+    } catch (e) {
+      console.warn('AI request failed:', e);
+      req.callback(this.fallbacks[req.request_type] || {});
+    } finally {
+      this.processing--;
+      this.processNext();
+    }
+  }
+
+  getCacheKey(req) {
+    if (req.request_type === 'combo_check') {
+      const ids = [req.context.new_building.type,req.context.adjacent_buildings.map(b=>b.type)].sort().join('_');
+      return `combo_${ids}`;
+    }
+    if (req.request_type === 'product_description') {
+      return `product_${req.context.product.item_id}_${req.context.product.quality_tier}`;
+    }
+    return null;
+  }
+}
+
+
+## 12.3 AI System Prompt（总纲）
+
+
+你是"星尘管家"，为殖民地模拟经营游戏《星尘殖民地》提供动态内容生成。
+
+# 基调
+- 轻松、温暖、幽默，类似开罗游戏风格
+- 外星人友善（最多有点奇怪），没有敌对文明
+- 怪物是自然生态一部分，不是邪恶的
+- 绝对禁止：黑暗剧情、角色死亡、道德困境、政治阴谋、恐怖元素
+
+# 六维引力系统
+所有实体都有六维坐标：美食🍳、知识📚、舒适🛋️、冒险⚔️、文化🎭、自然🌿
+生成的内容必须标注这六个维度的数值。
+
+# 输出规则
+1. 严格按指定JSON Schema输出
+2. 不附加额外文字
+3. 数值在指定区间内
+4. 描述文字保持幽默，包含至少一个"会心一笑"的细节
+5. 所有生成内容必须能通过六维引力向量融入经济系统
+
+
+---
+
+# 第十三部分：经济系统
+
+---
+
+
+const ECONOMY = {
+  initial_resources: { gold:1000, wood:50, stone:30, food:100, iron_ore:0, iron_ingot:0, crystal_shard:0, research_points:0, energy:50 },
+  base_storage_cap: 500,
+  warehouse_bonus: 200,
+
+  daily_consumption: {
+    food_per_resident: 2,
+    energy_per_powered_building: 1
+  },
+
+  food_shortage: {
+    mild: { threshold: 0.5, effects: { work_efficiency:-0.2, mood:-10 } },
+    severe: { threshold: 0, effects: { work_efficiency:-0.5, mood:-30, tourists_stop:true } }
+  }
+};
+
+
+---
+
+# 第十四部分：存档系统
+
+---
+
+
+const SAVE_SCHEMA = {
+  version: String,
+  timestamp: Number,
+  game_time: { year:Number, season:String, day:Number, hour:Number, total_ticks:Number },
+  seed: Number,
+  map: { width:Number, height:Number, tiles:[[Object]] },
+  buildings: [Object],
+  residents: { [id]: Object },
+  resources: Object,
+  inventory: [Object],
+  tech: { researched:[String], current:{ id:String, progress:Number }|null },
+  species_relations: [Object],
+  active_combos: [Object],
+  exploration: { regions:[Object] },
+  statistics: {
+    total_gold_earned:Number, total_tourists:Number, total_products:Number,
+    total_combos:Number, total_battles:Number, best_quality:String,
+    highest_rank:Number, play_time:Number
+  },
+  ai_cache: Object
+};
+
+function saveGame(state) {
+  localStorage.setItem('stardust_save', JSON.stringify(serializeState(state)));
+}
+function loadGame() {
+  const raw = localStorage.getItem('stardust_save');
+  return raw ? deserializeState(JSON.parse(raw)) : null;
+}
+// 每7游戏日自动存档
+
+
+---
+
+# 第十五部分：主游戏循环
+
+---
+
+
+function startGameLoop(gameState) {
+  let lastTime = Date.now();
+
+  function loop() {
+    const now = Date.now();
+    const delta = now - lastTime;
+    lastTime = now;
+
+    if (gameState.speed === 0) { render(gameState); requestAnimationFrame(loop); return; }
+
+    const ticks = Math.floor(delta / (TIME_CONFIG.ms_per_tick / gameState.speed));
+
+    for (let i = 0; i < Math.min(ticks, 6); i++) { // 最多每帧处理6个tick防卡
+      // 居民移动和行为
+      for (const r of Object.values(gameState.residents)) {
+        updateResidentMovement(r, gameState);
+        updateResidentBehavior(r, gameState);
+      }
+      // 生产
+      for (const b of gameState.buildings) {
+        if (b.production?.current_recipe && b.is_active && b.is_connected) {
+          processProduction(b, gameState);
+        }
+      }
+      // 游客行为
+      for (const t of gameState.activeTourists) {
+        updateTouristBehavior(t, gameState);
+      }
+      // 时间推进
+      gameState.currentHour++;
+      if (gameState.currentHour >= 24) {
+        gameState.currentHour = 0;
+        gameState.currentDay++;
+        dailyUpdate(gameState);
+      }
+    }
+
+    render(gameState);
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+}
+
+function dailyUpdate(gameState) {
+  // 1. 食物消耗
+  const foodCost = Object.keys(gameState.residents).length * ECONOMY.daily_consumption.food_per_resident;
+  gameState.resources.food = Math.max(0, gameState.resources.food - foodCost);
+
+  // 2. 居民心情
+  for (const r of Object.values(gameState.residents)) recalculateMood(r, gameState);
+
+  // 3. 研究进度
+  if (gameState.currentResearch) advanceResearch(gameState);
+
+  // 4. 游客检查
+  checkTouristArrival(gameState);
+
+  // 5. 事件检查
+  dailyEventCheck(gameState);
+
+  // 6. 居民日记（30%概率）
+  for (const r of Object.values(gameState.residents)) {
+    if (Math.random() < 0.3) requestAIDiary(r, gameState);
+  }
+
+  // 7. 季节
+  if (gameState.currentDay % TIME_CONFIG.days_per_season === 0) {
+    const seasons = ['spring','summer','autumn','winter'];
+    gameState.currentSeason = seasons[(seasons.indexOf(gameState.currentSeason)+1) % 4];
+    applySeasonEffects(gameState);
+  }
+
+  // 8. 年终
+  if (gameState.currentDay % (TIME_CONFIG.days_per_season * TIME_CONFIG.seasons_per_year) === 0) {
+    gameState.currentYear++;
+    requestAIAnnualReview(gameState);
+  }
+
+  // 9. 自动存档（每7天）
+  if (gameState.currentDay % 7 === 0) saveGame(gameState);
+}
+
+
+---
+
+# 第十六部分：渲染层级
+
+---
+
+
+function render(gameState) {
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Layer 0: 地形
+  renderTerrain(ctx, gameState);
+  // Layer 1: 道路
+  renderRoads(ctx, gameState);
+  // Layer 2-3: 建筑（按Y排序实现遮挡）
+  const sorted = [...gameState.buildings].sort((a,b) => a.row - b.row);
+  for (const b of sorted) renderBuilding(ctx, b, gameState);
+  // Layer 4: 居民和游客（按Y排序）
+  const entities = [...Object.values(gameState.residents), ...gameState.activeTourists]
+    .sort((a,b) => a.position.row - b.position.row);
+  for (const e of entities) renderEntity(ctx, e, gameState);
+  // Layer 5: 文字气泡和特效
+  renderEffects(ctx, gameState);
+  // Layer 6: 引力热力图（如果开启）
+  if (gameState.activeHeatmap) renderGravityHeatmap(ctx, gameState.activeHeatmap, gameState);
+  // Layer 7: 建筑放置预览
+  if (gameState.placementMode) renderPlacementPreview(ctx, gameState);
+}
+
+
+---
+
+# 第十七部分：UI面板速览
+
+---
+
+## 建筑信息弹窗
+
+
+┌──────────────────────────────────────────┐
+│ 🍞 面包工坊 Lv.3                   [×]  │
+│ "烤箱里传来让人幸福的咕噜声"             │
+├──────────────────────────────────────────┤
+│ 引力: 🍳80 📚10 🛋️40 ⚔️0 🎭15 🌿5    │
+│ 工人: 汉克(🔨72) 小麦(🔨45)            │
+│ 配方: 面包 / 星糖吐司                    │
+│ 进度: ████████░░ 78%                     │
+│ 输入: 小麦 12/20  牛奶 5/10              │
+│ 产出: 星糖吐司 ×4 (A+, A, B, A)          │
+│ 组合: 🎵 芳香乐园 (消费+25%)              │
+├──────────────────────────────────────────┤
+│ [切换配方] [调整工人] [升级 5000G]        │
+└──────────────────────────────────────────┘
+
+
+## 居民详情
+
+
+┌──────────────────────────────────┐
+│ 汉克 · Lv.8 面包师         [×]  │
+│ 性格: 一丝不苟·暴躁·嘴硬心软     │
+├──────────────────────────────────┤
+│ ❤️ 120/120  😊 85               │
+│ 🔨72 🔍25 ⚔️30 ✨45             │
+│ 引力亲和:                        │
+│ 🍳████░░ 40  📚██░░░░ 20        │
+│ 🛋️██████ 60  ⚔️█░░░░░ 10       │
+│ 🎭███░░░ 30  🌿████░░ 45        │
+├──────────────────────────────────┤
+│ 📖 日记: "今天烤了一炉还算       │
+│ 像样的吐司……"                    │
+│ [查看完整日记] [调整工作]         │
+└──────────────────────────────────┘
+
+
+## 年终评比
+
+
+┌──────────────────────────────────────────┐
+│ 🏆 第3年 银河殖民地评比            [×]  │
+│ 总评: B+  排名: #847↑152               │
+├──────────────────────────────────────────┤
+│ 🍳美食 ████████░░ 78 "令人印象深刻"     │
+│ 📚知识 ████░░░░░░ 38 "有待提高"         │
+│ 🛋️舒适 ██████░░░░ 55 "中规中矩"        │
+│ ⚔️冒险 ███░░░░░░░ 28 "略显无聊"         │
+│ 🎭文化 █████░░░░░ 48 "有潜力"           │
+│ 🌿自然 ███████░░░ 65 "绿意盎然"         │
+├──────────────────────────────────────────┤
+│ "面包工坊区域散发着令人无法抗拒的         │
+│  碳水化合物引力。章鱼星人代表在品尝       │
+│  星糖吐司后当场提交了移民申请。"          │
+│ 🥇 最佳美食殖民地 提名                   │
+│ 🌱 绿色殖民地 铜奖                       │
+└──────────────────────────────────────────┘
+
+
+---
+
+# 开发建议：分阶段实现
+
+| 阶段 | 模块 | 核心功能 | 预计工作量 |
+|------|------|---------|-----------|
+| **1** | 地图 + 建筑放置 | 网格渲染、地形生成、建筑放置/拆除、道路系统 | 先让东西能摆出来 |
+| **2** | 居民 + 生产 | 居民寻路、生产链运行、品质计算、资源流转 | 让经济跑起来 |
+| **3** | 引力系统 | 六维计算、热力图可视化、路径决策 | 让布局有意义 |
+| **4** | 游客 | 种族定义、到访逻辑、消费计算、好感度 | 让金币流入 |
+| **5** | AI接入 | 请求队列、组合判定、产品描述、日记 | 让世界活过来 |
+| **6** | 探索 + 战斗 | 区域系统、编队、战斗、AI事件 | 让世界更大 |
+| **7** | 科技 + 事件 | 科技树、事件系统、年终评比 | 让时间有意义 |
+| **8** | 打磨 | 动画、音效、平衡性调整、存档优化 | 让体验完整 |
+
+---
+
+这份合并文档涵盖了两个版本的全部优势：第一版的详细AI接口设计、生产链代码和请求队列架构，以及第二版的完整建筑列表、引力系统形式化、科技树和种族设定。六维引力系统作为统一坐标轴贯穿所有计算，AI只需在六个维度上输出数字即可让新内容自动融入整个经济生态。
+```

@@ -1,0 +1,149 @@
+/* ============================================
+   星尘殖民地 — 顶部状态栏
+   ============================================ */
+
+.top-bar {
+  grid-area: topbar;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--sp-4);
+  background: var(--bg-panel);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-subtle);
+  z-index: var(--z-ui);
+  height: var(--topbar-height);
+}
+
+.topbar-left,
+.topbar-center,
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.topbar-left { flex: 1; }
+.topbar-center { flex: 0 0 auto; }
+.topbar-right { flex: 1; justify-content: flex-end; }
+
+/* ---- Logo ---- */
+.game-logo {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-right: var(--sp-3);
+  padding-right: var(--sp-3);
+  border-right: 1px solid var(--border-subtle);
+}
+.logo-icon {
+  display: flex;
+  align-items: center;
+  color: var(--text-accent);
+}
+.logo-icon svg {
+  width: 18px; height: 18px;
+}
+.logo-text {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.05em;
+}
+
+/* ---- Resources ---- */
+.topbar-resources {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.resource-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px var(--sp-2);
+  border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.03);
+  transition: background var(--transition-fast);
+}
+.resource-badge:hover {
+  background: rgba(255,255,255,0.07);
+}
+.resource-badge svg {
+  width: 14px; height: 14px;
+  stroke-width: 1.5;
+  color: var(--text-secondary);
+}
+.resource-value {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-bold);
+  min-width: 28px;
+}
+
+/* ---- Date ---- */
+.date-display {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-sm);
+}
+.season-indicator {
+  padding: 1px var(--sp-2);
+  border-radius: var(--radius-full);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  background: rgba(168,216,185,0.12);
+}
+.date-text {
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+
+/* ---- Speed Controls ---- */
+.speed-controls {
+  display: flex;
+  gap: 2px;
+}
+.speed-btn {
+  width: 28px; height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.speed-btn:hover {
+  background: rgba(255,255,255,0.06);
+  color: var(--text-primary);
+}
+.speed-btn.active {
+  background: rgba(100,140,255,0.15);
+  border-color: var(--border-glow);
+  color: var(--text-accent);
+}
+.speed-btn svg {
+  width: 14px; height: 14px;
+  stroke-width: 1.5;
+}
+
+/* ---- Population ---- */
+.pop-display {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: var(--fs-sm);
+  padding-left: var(--sp-3);
+  border-left: 1px solid var(--border-subtle);
+}
+.pop-icon {
+  display: flex;
+  align-items: center;
+  color: var(--text-secondary);
+}
+.pop-icon svg { width: 14px; height: 14px; }
+.pop-count { font-family: var(--font-mono); font-weight: var(--fw-bold); }

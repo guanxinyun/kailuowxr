@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>星尘殖民地 · Stardust Colony</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✦</text></svg>" />
+  <link rel="stylesheet" href="/src/styles/variables.css" />
+  <link rel="stylesheet" href="/src/styles/base.css" />
+  <link rel="stylesheet" href="/src/styles/animations.css" />
+  <link rel="stylesheet" href="/src/styles/layout.css" />
+  <link rel="stylesheet" href="/src/styles/components.css" />
+  <link rel="stylesheet" href="/src/styles/topbar.css" />
+  <link rel="stylesheet" href="/src/styles/toolpanel.css" />
+  <link rel="stylesheet" href="/src/styles/modals.css" />
+  <link rel="stylesheet" href="/src/styles/modal-build.css" />
+  <link rel="stylesheet" href="/src/styles/modal-tech.css" />
+  <link rel="stylesheet" href="/src/styles/panels.css" />
+  <link rel="stylesheet" href="/src/styles/tutorial.css" />
+</head>
+<body>
+  <div id="app" class="game-layout">
+
+    <!-- ===== 顶部状态栏 ===== -->
+    <header class="top-bar" id="topbar">
+      <div class="topbar-left">
+        <div class="game-logo">
+          <span class="logo-icon" id="logo-icon"></span>
+          <span class="logo-text">星尘殖民地</span>
+        </div>
+        <div class="topbar-resources" id="topbar-resources">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+      <div class="topbar-center">
+        <div class="date-display">
+          <span class="season-indicator" id="season-indicator">星芽季</span>
+          <span class="date-text" id="date-text">Y1 · 第1天</span>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="speed-controls" id="speed-controls">
+          <button class="speed-btn" data-speed="0" title="暂停" id="speed-pause"></button>
+          <button class="speed-btn active" data-speed="1" title="正常" id="speed-normal"></button>
+          <button class="speed-btn" data-speed="2" title="快速" id="speed-fast"></button>
+          <button class="speed-btn" data-speed="3" title="极速" id="speed-max"></button>
+        </div>
+        <div class="pop-display" id="pop-display">
+          <span class="pop-icon" id="pop-icon"></span>
+          <span class="pop-count">3/4</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- ===== 左侧工具栏 ===== -->
+    <aside class="tool-panel" id="toolpanel">
+      <div class="tool-buttons" id="tool-buttons">
+        <!-- Filled by JS -->
+      </div>
+      <div class="tool-separator"></div>
+      <div class="gravity-toggles" id="gravity-toggles">
+        <!-- Filled by JS -->
+      </div>
+    </aside>
+
+    <!-- ===== 主画布区域 ===== -->
+    <main class="canvas-container" id="canvas-container">
+      <canvas id="canvas-terrain"></canvas>
+      <canvas id="canvas-dynamic"></canvas>
+      <canvas id="canvas-heatmap"></canvas>
+    </main>
+
+    <!-- ===== 右侧动态面板 ===== -->
+    <aside class="side-panel" id="side-panel">
+      <!-- Dynamically filled -->
+    </aside>
+
+    <!-- ===== 底部通知栏 ===== -->
+    <footer class="bottom-bar" id="bottombar">
+      <span class="bottom-icon" id="bottom-icon"></span>
+      <span class="bottom-message">欢迎来到星尘殖民地。在这片未知的星球上，建立属于你的文明。</span>
+    </footer>
+
+    <!-- ===== 模态框覆盖层 ===== -->
+    <div class="modal-overlay" id="modal-overlay"></div>
+
+    <!-- ===== 通知容器 ===== -->
+    <div class="notification-container" id="notification-container"></div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,198 @@
+/* ============================================
+   星尘殖民地 — 科技树面板
+   ============================================ */
+
+.tech-panel .modal-body {
+  padding: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.tech-tree-container {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  padding: var(--sp-6);
+  position: relative;
+}
+
+.tech-tree-svg {
+  min-width: 900px;
+  min-height: 500px;
+}
+
+/* ---- 连接线 ---- */
+.tech-line {
+  stroke: rgba(100,140,255,0.2);
+  stroke-width: 2;
+  fill: none;
+  transition: stroke var(--transition-normal);
+}
+.tech-line.researched {
+  stroke: rgba(100,140,255,0.5);
+  stroke-width: 2.5;
+}
+.tech-line.available {
+  stroke: rgba(100,140,255,0.35);
+  stroke-dasharray: 6 4;
+}
+
+/* ---- 科技节点 ---- */
+.tech-node {
+  cursor: pointer;
+  transition: all var(--transition-normal);
+}
+.tech-node:hover {
+  filter: brightness(1.2);
+}
+
+.tech-node-bg {
+  rx: 12;
+  ry: 12;
+  transition: all var(--transition-normal);
+}
+
+.tech-node.researched .tech-node-bg {
+  fill: rgba(74,144,217,0.25);
+  stroke: rgba(74,144,217,0.6);
+  stroke-width: 2;
+}
+.tech-node.available .tech-node-bg {
+  fill: rgba(100,140,255,0.1);
+  stroke: rgba(100,140,255,0.4);
+  stroke-width: 2;
+  animation: pulseBorder 2s infinite;
+}
+.tech-node.locked .tech-node-bg {
+  fill: rgba(40,45,70,0.5);
+  stroke: rgba(80,90,120,0.3);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+
+.tech-node-name {
+  fill: var(--text-primary);
+  font-size: 13px;
+  font-family: var(--font-body);
+  font-weight: 700;
+  text-anchor: middle;
+}
+.tech-node.locked .tech-node-name {
+  fill: var(--text-dim);
+}
+
+.tech-node-tier {
+  fill: var(--text-dim);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  text-anchor: middle;
+}
+
+.tech-node-icon {
+  text-anchor: middle;
+  font-size: 18px;
+}
+
+.tech-node-check {
+  fill: var(--color-success);
+  font-size: 14px;
+}
+
+.tech-node-lock {
+  fill: var(--text-dim);
+  opacity: 0.5;
+}
+
+/* ---- 科技详情浮动卡片 ---- */
+.tech-detail-card {
+  position: absolute;
+  width: 300px;
+  background: rgba(10,14,30,0.96);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border-glow);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-4);
+  box-shadow: var(--shadow-lg);
+  z-index: 10;
+  animation: fadeIn 150ms ease;
+  pointer-events: none;
+}
+.tech-detail-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(160,180,255,0.2), transparent);
+}
+.tech-detail-name {
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-bold);
+  margin-bottom: var(--sp-1);
+}
+.tech-detail-tier {
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  margin-bottom: var(--sp-3);
+}
+.tech-detail-section {
+  margin-bottom: var(--sp-3);
+}
+.tech-detail-section-title {
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: var(--sp-1);
+}
+.tech-detail-cost {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.tech-detail-prereqs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+}
+.tech-detail-unlocks {
+  font-size: var(--fs-sm);
+  color: var(--text-accent);
+}
+.tech-detail-flavor {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  font-style: italic;
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* ---- 研究进度条 ---- */
+.tech-research-bar {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  padding: var(--sp-3) var(--sp-6);
+  background: rgba(0,0,0,0.3);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid var(--border-subtle);
+  display: none;
+}
+.tech-research-bar.active {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  animation: slideInUp 200ms ease;
+}
+.tech-research-name {
+  font-weight: var(--fw-bold);
+  white-space: nowrap;
+}
+.tech-research-progress {
+  flex: 1;
+}
+.tech-research-time {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}

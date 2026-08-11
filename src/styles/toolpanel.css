@@ -1,0 +1,120 @@
+/* ============================================
+   星尘殖民地 — 左侧工具栏
+   ============================================ */
+
+.tool-btn {
+  width: 44px; height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  position: relative;
+}
+.tool-btn svg {
+  width: 20px; height: 20px;
+  stroke-width: 1.5;
+  transition: all var(--transition-fast);
+}
+.tool-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255,255,255,0.06);
+  border-color: var(--border-subtle);
+}
+.tool-btn:hover svg {
+  transform: scale(1.1);
+}
+.tool-btn.active {
+  color: var(--text-accent);
+  background: rgba(100,140,255,0.12);
+  border-color: var(--border-glow);
+  box-shadow: var(--glow-blue);
+}
+.tool-btn.active::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: 25%; bottom: 25%;
+  width: 3px;
+  background: var(--text-accent);
+  border-radius: 0 2px 2px 0;
+}
+
+.tool-btn-label {
+  position: absolute;
+  left: calc(100% + 8px);
+  padding: 2px 8px;
+  background: rgba(10,14,30,0.95);
+  border: 1px solid var(--border-glow);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+  color: var(--text-primary);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: all var(--transition-fast);
+  z-index: var(--z-tooltip);
+}
+.tool-btn:hover .tool-btn-label {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* ---- 工具栏分隔线 ---- */
+.tool-separator {
+  width: 32px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-subtle), transparent);
+  margin: var(--sp-2) 0;
+}
+
+/* ---- 引力切换按钮组 ---- */
+.gravity-toggles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  padding: 0 var(--sp-2);
+}
+.gravity-toggle {
+  width: 26px; height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  background: transparent;
+  position: relative;
+}
+.gravity-toggle svg {
+  width: 13px; height: 13px;
+  stroke-width: 1.5;
+}
+.gravity-toggle.food      { border-color: rgba(255,140,66,0.35);  color: var(--color-food); }
+.gravity-toggle.knowledge { border-color: rgba(74,144,217,0.35);  color: var(--color-knowledge); }
+.gravity-toggle.comfort   { border-color: rgba(168,216,185,0.35); color: var(--color-comfort); }
+.gravity-toggle.adventure { border-color: rgba(231,76,60,0.35);   color: var(--color-adventure); }
+.gravity-toggle.culture   { border-color: rgba(155,89,182,0.35);  color: var(--color-culture); }
+.gravity-toggle.nature    { border-color: rgba(46,204,113,0.35);  color: var(--color-nature); }
+
+.gravity-toggle:hover {
+  transform: scale(1.1);
+}
+
+.gravity-toggle.active.food      { background: var(--color-food-dim);      border-color: var(--color-food);      box-shadow: 0 0 8px rgba(255,140,66,0.3); }
+.gravity-toggle.active.knowledge { background: var(--color-knowledge-dim); border-color: var(--color-knowledge); box-shadow: 0 0 8px rgba(74,144,217,0.3); }
+.gravity-toggle.active.comfort   { background: var(--color-comfort-dim);   border-color: var(--color-comfort);   box-shadow: 0 0 8px rgba(168,216,185,0.3); }
+.gravity-toggle.active.adventure { background: var(--color-adventure-dim); border-color: var(--color-adventure); box-shadow: 0 0 8px rgba(231,76,60,0.3); }
+.gravity-toggle.active.culture   { background: var(--color-culture-dim);   border-color: var(--color-culture);   box-shadow: 0 0 8px rgba(155,89,182,0.3); }
+.gravity-toggle.active.nature    { background: var(--color-nature-dim);    border-color: var(--color-nature);    box-shadow: 0 0 8px rgba(46,204,113,0.3); }
+
+.gravity-toggle-label {
+  font-size: 9px;
+  margin-top: 1px;
+}
