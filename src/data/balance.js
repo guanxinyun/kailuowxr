@@ -6,6 +6,7 @@ export const BALANCE = Object.freeze({
   growth: Object.freeze({ experienceMultiplier: 1 }),
   tourism: Object.freeze({ incomeMultiplier: 1, minimumArrivalDays: 5, baseArrivalDays: 20 }),
   events: Object.freeze({ dailyChance: 0.015 }),
+  mapExpansion: Object.freeze({ stripDepth: 3, costMultiplier: 0.5 }),
   aiTriggers: Object.freeze({
     proposalLimit: 3,
     buildingCooldownDays: 120,

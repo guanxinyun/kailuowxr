@@ -72,6 +72,8 @@ export class CanvasRenderer {
     this._resize();
 
     bus.on('building:placed', () => { this._terrainDirty = true; this._dynamicDirty = true; });
+    bus.on('map:expanded', () => { this._terrainDirty = true; });
+    bus.on('map:revealed', () => { this._terrainDirty = true; });
     bus.on('state:gravityOverlay', () => { this._heatmapDirty = true; });
     bus.on('textures:changed', ({ slotId } = {}) => {
       if (!slotId || slotId.startsWith('terrain.') || slotId.startsWith('building.') || !slotId) this._terrainDirty = true;

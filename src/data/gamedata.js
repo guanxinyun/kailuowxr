@@ -86,6 +86,77 @@ export const EVENTS = [
     weight: 5,
     minDay: 5,
   },
+  // 探索发现事件 — 解锁特殊区域
+  {
+    id: 'discover_ruins', name: '卫星异常信号', type: 'exploration', icon: 'satellite',
+    unlockRegion: 'ancient_ruins',
+    narrative: '轨道卫星扫描到地表以下存在规则几何结构，初步分析表明这可能是某种古老文明的建筑遗迹。',
+    choices: [
+      { text: '标记坐标，准备考察', effect: { research: 3 }, result: '坐标已录入导航系统。远古遗迹区域现已开放考察！' },
+      { text: '先进行远程扫描', effect: { research: 5 }, result: '扫描获取了初步数据。远古遗迹区域现已开放考察！' },
+    ],
+    weight: 8, minDay: 10,
+  },
+  {
+    id: 'discover_crystal', name: '异常光谱', type: 'exploration', icon: 'sparkles',
+    unlockRegion: 'crystal_valley',
+    narrative: '夜间巡逻队报告在西南方向观测到异常的光谱反射，分析显示可能是大规模晶体矿脉。',
+    choices: [
+      { text: '派遣勘探队确认', effect: { crystal: 3 }, result: '勘探队确认了晶体峡谷的位置。该区域现已开放考察！' },
+      { text: '采集光谱样本分析', effect: { research: 4 }, result: '光谱数据揭示了晶体峡谷的方位。该区域现已开放考察！' },
+    ],
+    weight: 8, minDay: 15,
+  },
+  {
+    id: 'discover_forest', name: '孢子飘落', type: 'exploration', icon: 'trees',
+    unlockRegion: 'deep_forest',
+    narrative: '空气过滤系统捕获了大量未知植物孢子，追踪风向发现它们来自一片茂密的异星森林。',
+    choices: [
+      { text: '追踪孢子来源', effect: { food: 4 }, result: '成功定位了异星密林。该区域现已开放考察！' },
+      { text: '培养孢子样本', effect: { research: 3, food: 2 }, result: '样本分析指向了密林方位。该区域现已开放考察！' },
+    ],
+    weight: 7, minDay: 20,
+  },
+  {
+    id: 'discover_volcano', name: '地震波异常', type: 'exploration', icon: 'flame',
+    unlockRegion: 'volcano_rim',
+    narrative: '地震监测站记录到有规律的低频震动，震源指向一座活跃火山的边缘地带。',
+    choices: [
+      { text: '部署远程探测器', effect: { metal: 5 }, result: '探测器传回了火山边缘的详细地形。该区域现已开放考察！' },
+      { text: '分析地震数据', effect: { research: 5 }, result: '数据分析揭示了火山边缘的资源潜力。该区域现已开放考察！' },
+    ],
+    weight: 6, minDay: 30,
+  },
+  {
+    id: 'discover_signal', name: '深空回响', type: 'exploration', icon: 'radio',
+    unlockRegion: 'signal_source',
+    narrative: '通讯阵列接收到一段来自星球深处的加密信号，信号强度远超自然现象。',
+    choices: [
+      { text: '三角定位信号源', effect: { research: 8 }, result: '信号源已精确定位。该区域现已开放考察！' },
+      { text: '尝试解密信号内容', effect: { research: 10 }, result: '部分解密成功，获得了信号源坐标。该区域现已开放考察！' },
+    ],
+    weight: 5, minDay: 40,
+  },
+  {
+    id: 'discover_snow', name: '极地气流', type: 'exploration', icon: 'snowflake',
+    unlockRegion: 'snow_frontier',
+    narrative: '气象站检测到来自北方的异常冷气流，卫星图像显示那里存在一片广袤的冰雪荒原。',
+    choices: [
+      { text: '发射气象探测气球', effect: { research: 4 }, result: '气球传回了寒霜边界的地形数据。该区域现已开放考察！' },
+      { text: '分析冰晶成分', effect: { crystal: 4 }, result: '冰晶分析揭示了寒霜边界的位置。该区域现已开放考察！' },
+    ],
+    weight: 5, minDay: 50,
+  },
+  {
+    id: 'discover_desert', name: '热浪信号', type: 'exploration', icon: 'sun',
+    unlockRegion: 'desert_frontier',
+    narrative: '热成像卫星在南方发现了异常的热辐射模式，地表温度远超周围区域，可能蕴含特殊矿物。',
+    choices: [
+      { text: '派遣无人机侦察', effect: { metal: 5 }, result: '无人机传回了赤沙边界的详细影像。该区域现已开放考察！' },
+      { text: '分析热辐射数据', effect: { research: 5 }, result: '数据分析确认了赤沙边界的位置。该区域现已开放考察！' },
+    ],
+    weight: 5, minDay: 60,
+  },
 ];
 
 // ===== 地图瓦片类型 =====
@@ -122,17 +193,42 @@ export const RESOURCES = {
   credits:  { name: '星币',     icon: 'coins',          color: '#F0C040' },
 };
 
-// ===== 探索区域 =====
+// ===== 探索区域（特殊，事件解锁，一次性） =====
 export const EXPLORE_REGIONS = [
-  { id: 'nearby_caves',   name: '近地洞穴群',   danger: 1, distance: 1, rewards: ['metal', 'crystal'], desc: '殖民地附近的天然洞穴系统，可能蕴含矿物资源。' },
-  { id: 'ancient_ruins',  name: '远古遗迹',     danger: 2, distance: 2, rewards: ['research', 'artifact'], desc: '卫星扫描发现的异常结构，似乎是某个古老文明的遗迹。' },
-  { id: 'crystal_valley', name: '晶体峡谷',     danger: 2, distance: 2, rewards: ['crystal'], desc: '一条布满发光晶体的深谷，美丽而危险。' },
-  { id: 'deep_forest',    name: '异星密林',     danger: 3, distance: 3, rewards: ['nature', 'food'], desc: '茂密的外星植被区域，生态系统复杂且未知。' },
-  { id: 'volcano_rim',    name: '火山边缘',     danger: 4, distance: 3, rewards: ['metal', 'energy'], desc: '活跃火山的边缘地带，高温高压但资源丰富。' },
-  { id: 'signal_source',  name: '信号源',       danger: 5, distance: 4, rewards: ['research', 'contact'], desc: '神秘信号的发射源头，可能是外星文明的前哨站。' },
-  { id: 'snow_frontier', name: '寒霜边界考察', difficulty: 3, distance: 3, biome: 'snow', days: 5, requiredExploration: 12, requiredSurvival: 3, supply: 'thermal_kit', rewards: { crystal: 12, research: 8, ice_core: 2 }, desc: '记录寒霜原的生态循环与地下冰核。' },
-  { id: 'desert_frontier', name: '赤沙边界考察', difficulty: 4, distance: 4, biome: 'desert', days: 6, requiredExploration: 14, requiredSurvival: 4, supply: 'cooling_kit', rewards: { metal: 18, research: 10, sun_crystal: 2 }, desc: '调查赤沙地的昼夜温差与太阳晶体。' },
+  { id: 'nearby_caves',   name: '近地洞穴群',   danger: 1, distance: 1, biome: 'metal',    rewardPool: { metal: [3, 8], crystal: [1, 5] }, desc: '殖民地附近的天然洞穴系统，可能蕴含矿物资源。' },
+  { id: 'ancient_ruins',  name: '远古遗迹',     danger: 2, distance: 2, biome: 'ruins',    rewardPool: { research: [5, 12] }, desc: '卫星扫描发现的异常结构，似乎是某个古老文明的遗迹。' },
+  { id: 'crystal_valley', name: '晶体峡谷',     danger: 2, distance: 2, biome: 'crystal',  rewardPool: { crystal: [4, 9] }, desc: '一条布满发光晶体的深谷，美丽而危险。' },
+  { id: 'deep_forest',    name: '异星密林',     danger: 3, distance: 3, biome: 'forest',   rewardPool: { food: [6, 14] }, desc: '茂密的外星植被区域，生态系统复杂且未知。' },
+  { id: 'volcano_rim',    name: '火山边缘',     danger: 4, distance: 3, biome: 'crater',   rewardPool: { metal: [8, 16], energy: [4, 12] }, desc: '活跃火山的边缘地带，高温高压但资源丰富。' },
+  { id: 'signal_source',  name: '信号源',       danger: 5, distance: 4, biome: 'mountain', rewardPool: { research: [10, 20] }, desc: '神秘信号的发射源头，可能是外星文明的前哨站。' },
+  { id: 'snow_frontier', name: '寒霜边界考察', difficulty: 3, distance: 3, biome: 'snow', days: 5, requiredExploration: 12, requiredSurvival: 3, supply: 'thermal_kit', rewardPool: { crystal: [8, 16], research: [5, 12], ice_core: [1, 3] }, desc: '记录寒霜原的生态循环与地下冰核。' },
+  { id: 'desert_frontier', name: '赤沙边界考察', difficulty: 4, distance: 4, biome: 'desert', days: 6, requiredExploration: 14, requiredSurvival: 4, supply: 'cooling_kit', rewardPool: { metal: [12, 24], research: [6, 14], sun_crystal: [1, 3] }, desc: '调查赤沙地的昼夜温差与太阳晶体。' },
 ];
+
+// ===== 随机考察任务模板 =====
+export const RANDOM_EXPEDITION_TEMPLATES = {
+  prefixes: ['废弃', '隐蔽', '荒芜', '神秘', '古老', '偏远', '幽暗', '崎岖', '风蚀', '冰封'],
+  suffixes: ['矿洞', '营地', '峡谷', '丘陵', '盆地', '台地', '裂谷', '石林', '冰原', '沙丘'],
+  descs: [
+    '卫星扫描发现的异常区域，值得实地考察。',
+    '一处未被记录的地形，可能蕴含资源。',
+    '探测器回传了模糊的信号，需要派人确认。',
+    '地质活动留下的痕迹，或许能找到有价值的矿物。',
+    '一片从未涉足的区域，充满未知与可能。',
+  ],
+  // 按难度等级的奖励池配置
+  rewardTiers: [
+    { resources: ['metal', 'food'],              amounts: [3, 8],  bonus: ['crystal'],       bonusAmounts: [1, 3], bonusChance: 0.3 },
+    { resources: ['metal', 'crystal', 'food'],    amounts: [5, 12], bonus: ['research'],      bonusAmounts: [2, 5], bonusChance: 0.4 },
+    { resources: ['metal', 'crystal', 'energy'],  amounts: [8, 18], bonus: ['research'],      bonusAmounts: [4, 8], bonusChance: 0.5 },
+    { resources: ['crystal', 'energy', 'research'], amounts: [10, 22], bonus: ['metal'],      bonusAmounts: [5, 10], bonusChance: 0.5 },
+  ],
+};
+
+// ===== 地图拓展配置 =====
+export const MAP_EXPANSION = {
+  label: '地图拓展', icon: 'maximize', baseCost: { metal: 30, energy: 20 },
+};
 
 // ===== 季节配置 =====
 export const SEASONS = [

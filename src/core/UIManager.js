@@ -134,7 +134,7 @@ export class UIManager {
       children.push(createElement('div', { className: 'modal-footer' }, [footer]));
     }
 
-    return createElement('div', {}, children);
+    return createElement('div', { className: 'modal-inner' }, children);
   }
 
   _createCloseButton() {

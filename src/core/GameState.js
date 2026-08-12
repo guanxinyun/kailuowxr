@@ -71,6 +71,9 @@ const DEFAULT_STATE = {
   // 探索
   exploredRegions: [],
   activeExploration: null,
+  unlockedRegions: ['nearby_caves'],
+  randomExpedition: null,       // 当前可用的随机考察任务
+  mapExpansion: { count: 0 },
 
   // 生产与加工
   production: {
@@ -221,6 +224,11 @@ class GameState {
       if (loaded.storage.credits == null) loaded.storage.credits = Infinity;
       loaded.exploredRegions = Array.isArray(loaded.exploredRegions) ? loaded.exploredRegions : [];
       loaded.activeExploration = loaded.activeExploration || null;
+      loaded.unlockedRegions = Array.isArray(loaded.unlockedRegions)
+        ? loaded.unlockedRegions
+        : ['nearby_caves', ...(loaded.exploredRegions || [])];
+      loaded.randomExpedition = loaded.randomExpedition || null;
+      loaded.mapExpansion = { count: 0, ...(loaded.mapExpansion || {}) };
       loaded.production = {
         inventory: {},
         queue: [],

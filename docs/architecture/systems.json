@@ -41,7 +41,7 @@
         {"file": "src/core/CanvasRenderer.js", "names": ["CanvasRenderer"]},
         {"file": "src/core/ResidentSprites.js", "names": ["ALIEN_COLORS", "ResidentSprite", "ResidentSpriteManager"]}
       ],
-      "events": ["building:placed", "tourist:arrived", "tourist:leaving", "tile:hover", "tile:click", "building:place"],
+      "events": ["building:placed", "tourist:arrived", "tourist:leaving", "tile:hover", "tile:click", "building:place", "map:expanded", "map:revealed"],
       "designRefs": ["设计总纲.txt#七、美术与音效方向"]
     },
     {
@@ -131,18 +131,19 @@
     },
     {
       "id": "exploration",
-      "name": "探索与战斗",
-      "status": "placeholder",
-      "summary": "单居民和平考察按游戏日推进，校验探索力、生存技能和环境补给；完成后揭示生态区并奖励成长，无战斗。",
-      "owns": ["state.exploredRegions", "state.activeExploration（未使用）"],
-      "files": ["src/core/ExplorationSystem.js", "src/panels/UtilityPanels.js", "src/data/gamedata.js", "src/core/GameState.js", "src/core/MapGenerator.js"],
-      "callers": ["src/main.js"],
+      "name": "探索与地图拓展",
+      "status": "implemented",
+      "summary": "8个特殊区域通过随机事件逐步解锁（nearby_caves默认），每区域仅一次，奖励在rewardPool范围内随机掷骰；另有无限随机考察任务。地图购买拓展，每次从已探索边缘向四周均匀扩散stripDepth层。无战斗。",
+      "owns": ["state.exploredRegions", "state.activeExploration", "state.unlockedRegions", "state.randomExpedition", "state.mapExpansion.count"],
+      "files": ["src/core/ExplorationSystem.js", "src/core/MapExpansionSystem.js", "src/panels/UtilityPanels.js", "src/data/gamedata.js", "src/core/GameState.js"],
+      "callers": ["src/main.js", "src/panels/EventModal.js"],
       "exports": [
-        {"file": "src/core/ExplorationSystem.js", "names": ["getExploreRegion", "canStartExpedition", "startExpedition", "updateExplorationSystem", "revealBiomeSector", "normalizeExplorationState"]},
+        {"file": "src/core/ExplorationSystem.js", "names": ["getExploreRegion", "unlockRegion", "generateRandomExpedition", "clearRandomExpedition", "canStartExpedition", "startExpedition", "updateExplorationSystem", "revealBiomeSector", "normalizeExplorationState"]},
+        {"file": "src/core/MapExpansionSystem.js", "names": ["getExpansionCost", "canExpand", "purchaseExpansion"]},
         {"file": "src/panels/UtilityPanels.js", "names": ["openExplorePanel"]},
-        {"file": "src/data/gamedata.js", "names": ["EXPLORE_REGIONS"]}
+        {"file": "src/data/gamedata.js", "names": ["EXPLORE_REGIONS", "RANDOM_EXPEDITION_TEMPLATES", "MAP_EXPANSION"]}
       ],
-      "events": ["explore:start"],
+      "events": ["explore:started", "explore:completed", "explore:unlocked", "explore:narration", "map:expanded", "map:revealed"],
       "designRefs": ["设计总纲.txt#3.3 第三里程碑：探索与战斗", "设计文档.txt#第十部分：探索系统"]
     },
     {
@@ -231,7 +232,7 @@
       "files": ["src/data/gamedata.js", "src/data/buildings.js", "src/data/techs.js", "src/data/residents.js", "src/data/species.js"],
       "callers": ["src/main.js", "src/core/GameState.js", "src/core/CanvasRenderer.js", "src/core/TouristManager.js", "src/panels/BuildPanel.js", "src/panels/TechPanel.js"],
       "exports": [
-        {"file": "src/data/gamedata.js", "names": ["EVENTS", "TILE_TYPES", "GRAVITY_CONFIG", "RESOURCES", "EXPLORE_REGIONS", "SEASONS"]},
+        {"file": "src/data/gamedata.js", "names": ["EVENTS", "TILE_TYPES", "GRAVITY_CONFIG", "RESOURCES", "EXPLORE_REGIONS", "RANDOM_EXPEDITION_TEMPLATES", "MAP_EXPANSION", "SEASONS"]},
         {"file": "src/data/techs.js", "names": ["TECHS", "getTechById", "getTechsByTier", "getAvailableTechs"]}
       ],
       "events": [],

@@ -16,6 +16,15 @@
   overflow: hidden;
   max-height: 90vh;
 }
+/* createModalContent 返回的包装 div，必须传递 flex 列布局 */
+.modal > .modal-inner {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+}
 .modal::before {
   content: '';
   position: absolute;
@@ -67,12 +76,11 @@
 }
 
 .modal-body {
-  flex: 1 1 0;
+  flex: 1 1 auto;
   overflow-y: auto;
   overflow-x: hidden;
   padding: var(--sp-4) var(--sp-6);
-  min-height: 0; /* fix flex overflow */
-  max-height: calc(90vh - 120px); /* 减去header+footer的大致高度 */
+  min-height: 0; /* flex 子项允许缩小到 0，启用 overflow 滚动 */
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain; /* 防止滚动穿透到背景 */
 }

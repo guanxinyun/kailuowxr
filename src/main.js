@@ -29,7 +29,7 @@ import { textureManager } from './core/TextureManager.js';
 import { getBuildingEfficiency, getBuildingOperationalState } from './core/BuildingSystem.js';
 import { evaluateCombos } from './core/ComboSystem.js';
 import { normalizeAllResidents, updateResidentGrowth } from './core/ResidentGrowthSystem.js';
-import { normalizeExplorationState, updateExplorationSystem } from './core/ExplorationSystem.js';
+import { normalizeExplorationState, updateExplorationSystem, unlockRegion } from './core/ExplorationSystem.js';
 import { saveManager } from './core/SaveManager.js';
 import { generateComboComment, handleAIContentMilestone, restoreDynamicContent, updateDynamicContent } from './core/DynamicContentSystem.js';
 import { openAIContentPanel } from './panels/AIContentPanel.js';
@@ -51,6 +51,11 @@ async function init() {
   normalizeAllResidents();
   normalizeExplorationState();
   restoreDynamicContent();
+
+  // 事件解锁探索区域
+  bus.on('event:resolved', ({ event }) => {
+    if (event.unlockRegion) unlockRegion(event.unlockRegion);
+  });
 
   // Setup UI components
   setupTopBar();

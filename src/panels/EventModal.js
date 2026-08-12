@@ -17,7 +17,10 @@ const EFFECT_NAMES = {
 };
 
 export function triggerRandomEvent() {
-  const eligible = EVENTS.filter(e => gameState.state.day >= e.minDay);
+  const eligible = EVENTS.filter(e =>
+    gameState.state.day >= e.minDay &&
+    (!e.unlockRegion || !gameState.state.unlockedRegions.includes(e.unlockRegion))
+  );
   if (eligible.length === 0) return;
 
   const totalWeight = eligible.reduce((sum, e) => sum + e.weight, 0);
@@ -38,11 +41,11 @@ export function showEventModal(event) {
   const typeColors = {
     disaster: 'var(--color-adventure)', discovery: 'var(--color-knowledge)',
     science: 'var(--color-knowledge)', trade: 'var(--color-food)',
-    wonder: 'var(--color-culture)',
+    wonder: 'var(--color-culture)', exploration: 'var(--color-adventure)',
   };
   const typeNames = {
     disaster: '灾难', discovery: '发现', science: '科学',
-    trade: '贸易', wonder: '奇观',
+    trade: '贸易', wonder: '奇观', exploration: '探索',
   };
 
   container.appendChild(createElement('div', {
