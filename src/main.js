@@ -18,28 +18,39 @@ import { openResidentPanel } from './panels/ResidentPanel.js';
 import { openAnnualPanel } from './panels/AnnualPanel.js';
 import { triggerRandomEvent } from './panels/EventModal.js';
 import { openExplorePanel, openStatsPanel, openSettingsPanel } from './panels/UtilityPanels.js';
+import { openProductionPanel } from './panels/ProductionPanel.js';
+import { openBuildingManagementPanel } from './panels/BuildingManagementPanel.js';
+import { openTourismPanel } from './panels/TourismPanel.js';
 import { TutorialManager } from './core/TutorialManager.js';
 import { updateTouristSystem } from './core/TouristManager.js';
+import { updateProductionSystem } from './core/ProductionSystem.js';
 import { RESIDENT_NAME_POOL, TRAIT_POOL } from './data/residents.js';
+import { textureManager } from './core/TextureManager.js';
+import { getBuildingEfficiency, getBuildingOperationalState } from './core/BuildingSystem.js';
+import { evaluateCombos } from './core/ComboSystem.js';
+import { normalizeAllResidents, updateResidentGrowth } from './core/ResidentGrowthSystem.js';
+import { normalizeExplorationState, updateExplorationSystem } from './core/ExplorationSystem.js';
+import { saveManager } from './core/SaveManager.js';
+import { generateComboComment, restoreDynamicContent, updateDynamicContent } from './core/DynamicContentSystem.js';
+import { openAIContentPanel } from './panels/AIContentPanel.js';
+import { BALANCE } from './data/balance.js';
+import { getCurrentDailyResourceFlow } from './core/ResourceFlowSystem.js';
 
 // ===== Initialize =====
-function init() {
-  // Generate map
-  const map = generateMap(32, Math.floor(Math.random() * 10000));
-  gameState.set('map', map);
-
-  // 在地图中心放置降落点（开局建筑）
-  const center = Math.floor(32 / 2);
-  const landingPad = {
-    id: 'bld_landing',
-    buildingId: 'landing_pad',
-    x: center,
-    y: center,
-    built: true,
-    progress: 1,
-  };
-  gameState.addBuilding(landingPad);
-  map[center][center].building = 'landing_pad';
+async function init() {
+  await textureManager.init();
+  const loadedSave = saveManager.loadActive();
+  if (!loadedSave) {
+    const map = generateMap(32, Math.floor(Math.random() * 10000));
+    gameState.set('map', map);
+    const center = Math.floor(32 / 2);
+    const landingPad = { id: 'bld_landing', buildingId: 'landing_pad', x: center, y: center, built: true, progress: 1 };
+    gameState.addBuilding(landingPad);
+    map[center][center].building = 'landing_pad';
+  }
+  normalizeAllResidents();
+  normalizeExplorationState();
+  restoreDynamicContent();
 
   // Setup UI components
   setupTopBar();
@@ -107,6 +118,10 @@ function init() {
   bus.on('ai:tip', (tip) => {
     ui.setBottomMessage(`[AI] ${tip}`);
   });
+  bus.on('combo:discovered', ({ combo }) => {
+    if (!gameState.state.aiContent.enabled) return;
+    generateComboComment(combo.buildingIds).then(comment => ui.setBottomMessage(`[组合评价] ${comment}`));
+  });
 
   // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
@@ -117,6 +132,10 @@ function init() {
       case 'd': case 'D': openDiplomacyPanel(); break;
       case 'r': case 'R': openResidentPanel(); break;
       case 'e': case 'E': openExplorePanel(); break;
+      case 'p': case 'P': openProductionPanel(); break;
+      case 'm': case 'M': openBuildingManagementPanel(); break;
+      case 'v': case 'V': openTourismPanel(); break;
+      case 'a': case 'A': openAIContentPanel(); break;
       case 'Escape':
         gameState.set('placingBuilding', null);
         break;
@@ -164,36 +183,32 @@ function init() {
 function gameTick() {
   gameState.advanceDay();
 
+  evaluateCombos();
+  updateResidentGrowth();
+  updateExplorationSystem();
+  updateDynamicContent();
+
   // 当前季节效果
   const season = SEASONS[gameState.state.season];
-  const seasonFoodMult = season.effect?.food || 1;
-  const seasonEnergyMult = season.effect?.energy || 1;
-
   // ===== 居民技能加成计算 =====
   const residents = gameState.state.residents;
   let avgEngineering = 0, avgResearch = 0, avgFarming = 0;
-  let avgCombat = 0, avgSocial = 0, avgSurvival = 0;
+  let avgSocial = 0;
   if (residents.length > 0) {
     for (const r of residents) {
       avgEngineering += (r.skills?.engineering || 1);
       avgResearch    += (r.skills?.research || 1);
       avgFarming     += (r.skills?.farming || 1);
-      avgCombat      += (r.skills?.combat || 1);
       avgSocial      += (r.skills?.social || 1);
-      avgSurvival    += (r.skills?.survival || 1);
     }
     avgEngineering /= residents.length;
     avgResearch    /= residents.length;
     avgFarming     /= residents.length;
-    avgCombat      /= residents.length;
     avgSocial      /= residents.length;
-    avgSurvival    /= residents.length;
   }
   // 技能加成：基础值1.0，每点技能+5%（技能范围1-10）
   const skillBuildBonus    = 1 + (avgEngineering - 1) * 0.05; // 工程技能加速建造
-  const skillFarmBonus     = 1 + (avgFarming - 1) * 0.05;     // 农业技能加速食物产出
   const skillResearchBonus = 1 + (avgResearch - 1) * 0.05;    // 研究技能加速科研
-  const skillDefenseBonus  = 1 + (avgCombat - 1) * 0.05;      // 战斗技能加强防御
   const skillHappyBonus    = 1 + (avgSocial - 1) * 0.03;      // 社交技能提升幸福度
 
   // 全局效率加成
@@ -207,7 +222,6 @@ function gameTick() {
   let totalDefense = 0;
   let totalHappiness = 0;
   let totalTourism = 0;
-  let totalIncome = 0;
 
   // Resource production from buildings
   for (const building of gameState.state.buildings) {
@@ -215,7 +229,7 @@ function gameTick() {
       // Construction progress (buildTime=2 → 20天建好，速度1约40秒)
       // 工程技能加速建造
       const data = getBuildingById(building.buildingId);
-      building.progress += (1 / (data.buildTime * 10)) * buildBonus * skillBuildBonus;
+      building.progress += (1 / (data.buildTime * BALANCE.construction.buildTimeDays)) * buildBonus * skillBuildBonus;
       if (building.progress >= 1) {
         building.built = true;
         building.progress = 1;
@@ -236,45 +250,9 @@ function gameTick() {
     // 建成建筑的生产
     const data = getBuildingById(building.buildingId);
     if (!data || !data.effect) continue;
+    if (!getBuildingOperationalState(building).operational) continue;
 
-    const eff = 1 + globalEff;
-    const prodRate = 0.15; // 基础产出倍率
-
-    // 金属生产（受工程技能影响）
-    if (data.effect.metal) {
-      gameState.addResource('metal', data.effect.metal * prodRate * skillBuildBonus * eff);
-    }
-    // 晶体生产（受工程技能影响）
-    if (data.effect.crystal) {
-      gameState.addResource('crystal', data.effect.crystal * prodRate * skillBuildBonus * eff);
-    }
-    // 食物生产（受季节、农场加成和农业技能影响）
-    if (data.effect.food) {
-      gameState.addResource('food', data.effect.food * prodRate * seasonFoodMult * farmBonus * skillFarmBonus * eff);
-    }
-    // 能源生产（受季节影响）
-    if (data.effect.energy) {
-      gameState.addResource('energy', data.effect.energy * prodRate * seasonEnergyMult * eff);
-    }
-    // 研究点生产（受研究加成和研究技能影响）
-    if (data.effect.research) {
-      gameState.addResource('research', data.effect.research * prodRate * researchBonus * skillResearchBonus * eff);
-    }
-    // 氧气
-    if (data.effect.oxygen) {
-      // 氧气暂无独立资源，折算为能量
-      gameState.addResource('energy', data.effect.oxygen * 0.08);
-    }
-    // 星币收入（贸易站等）
-    if (data.effect.income) {
-      totalIncome += data.effect.income * prodRate * eff;
-    }
-    // 贸易解锁（trade_hub 产生持续收入）
-    if (data.effect.trade) {
-      totalIncome += 2 * prodRate * eff;
-    }
-
-    // 收集非即时效果（在下面统一处理）
+    // 收集非资源持续效果（资源流在循环后统一结算）
     if (data.effect.happiness) totalHappiness += data.effect.happiness * 0.01;
     if (data.effect.defense) totalDefense += data.effect.defense;
     if (data.effect.tourism) totalTourism += data.effect.tourism;
@@ -317,9 +295,10 @@ function gameTick() {
     }
   }
 
-  // 星币收入结算
-  if (totalIncome > 0) {
-    gameState.addResource('credits', totalIncome);
+  // 每日资源流统一结算：持续产出、持续消耗与面板使用同一结果
+  const dailyFlow = getCurrentDailyResourceFlow();
+  for (const [resource, amount] of Object.entries(dailyFlow.net)) {
+    if (amount) gameState.addResource(resource, amount);
   }
 
   // 幸福度变化（建筑加成 - 消耗 - 季节影响 + 社交技能加成）
@@ -328,10 +307,6 @@ function gameTick() {
   if (Math.abs(newHappiness - gameState.state.happiness) > 0.5) {
     gameState.set('happiness', Math.round(newHappiness));
   }
-
-  // Food consumption
-  const foodConsumption = gameState.state.population * 0.3;
-  gameState.addResource('food', -foodConsumption);
 
   // 如果食物耗尽，幸福度下降
   if (gameState.state.resources.food <= 0) {
@@ -382,6 +357,9 @@ function gameTick() {
       growPopulation();
     }
   }
+
+  // 生产加工系统
+  updateProductionSystem();
 
   // 外星游客系统
   updateTouristSystem();
@@ -458,6 +436,13 @@ function growPopulation() {
       social: 1 + Math.floor(Math.random() * 4),
       survival: 1 + Math.floor(Math.random() * 4),
     },
+    xp: 0,
+    stamina: 10,
+    labor: 10,
+    exploration: 10,
+    proficiency: { engineering: 0, research: 0, farming: 0, social: 0, survival: 0 },
+    housingStage: 1,
+    growthLog: [],
     mood: state.happiness,
     diary: [`第${state.day}天：我来到了星尘殖民地，这里将是我的新家。`],
   };
@@ -529,7 +514,11 @@ function setupToolPanel() {
     { id: 'diplomacy', icon: 'globe',           label: '外交 (D)',    action: openDiplomacyPanel },
     { id: 'residents', icon: 'users',           label: '居民 (R)',    action: openResidentPanel },
     { id: 'explore',   icon: 'compass',         label: '探索 (E)',    action: openExplorePanel },
-    { id: 'stats',     icon: 'bar-chart-3',     label: '统计',       action: openStatsPanel },
+    { id: 'production', icon: 'factory',        label: '加工 (P)',    action: openProductionPanel },
+    { id: 'manage',    icon: 'building-2',      label: '设施 (M)',    action: openBuildingManagementPanel },
+    { id: 'tourism',   icon: 'map-pinned',      label: '旅游 (V)',    action: openTourismPanel },
+    { id: 'ai-content', icon: 'sparkles',       label: 'AI工坊 (A)',  action: openAIContentPanel },
+    { id: 'stats',     icon: 'bar-chart-3',      label: '统计',       action: openStatsPanel },
     { id: 'settings',  icon: 'settings',        label: '设置',       action: openSettingsPanel },
   ];
 

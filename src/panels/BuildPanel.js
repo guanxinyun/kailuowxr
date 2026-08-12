@@ -9,6 +9,7 @@ import { AI_REQUEST_TYPES } from '../ai/AIPrompts.js';
 import { createElement, lucideIcon, formatNumber, $ } from '../core/utils.js';
 import { BUILDINGS, BUILDING_CATEGORIES, getBuildingsByCategory } from '../data/buildings.js';
 import { GRAVITY_CONFIG, RESOURCES } from '../data/gamedata.js';
+import { calculateBuildingDailyOutput, formatDailyRate } from '../core/ResourceFlowSystem.js';
 
 export function openBuildPanel() {
   let activeCategory = 'basic';
@@ -166,18 +167,16 @@ export function openBuildPanel() {
       style: { fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.6', marginBottom: 'var(--sp-3)' },
     }, [b.desc]));
 
-    // 效果说明
+    // 效果说明：资源展示基准日产量，容量与持续属性保留各自单位
     const effectItems = [];
-    if (b.effect.metal) effectItems.push(`金属 +${b.effect.metal}`);
-    if (b.effect.crystal) effectItems.push(`晶体 +${b.effect.crystal}`);
-    if (b.effect.energy) effectItems.push(`能量 +${b.effect.energy}`);
-    if (b.effect.food) effectItems.push(`食物 +${b.effect.food}`);
-    if (b.effect.research) effectItems.push(`研究 +${b.effect.research}`);
+    const dailyOutput = calculateBuildingDailyOutput(b, { buildingId: b.id, built: true, level: 1 }, { operational: true });
+    for (const [resource, amount] of Object.entries(dailyOutput)) {
+      effectItems.push(`${RESOURCES[resource]?.name || resource} +${formatDailyRate(amount)}/天`);
+    }
     if (b.effect.population) effectItems.push(`人口上限 +${b.effect.population}`);
-    if (b.effect.happiness) effectItems.push(`幸福度 +${b.effect.happiness}`);
-    if (b.effect.defense) effectItems.push(`防御 +${b.effect.defense}`);
-    if (b.effect.tourism) effectItems.push(`旅游 +${b.effect.tourism}`);
-    if (b.effect.income) effectItems.push(`收入 +${b.effect.income}`);
+    if (b.effect.happiness) effectItems.push(`持续幸福影响 +${b.effect.happiness}`);
+    if (b.effect.defense) effectItems.push(`运行时防御 +${b.effect.defense}`);
+    if (b.effect.tourism) effectItems.push(`旅游吸引力 +${b.effect.tourism}`);
     if (b.effect.trade) effectItems.push('解锁贸易');
     if (b.effect.storageBonus) effectItems.push(`存储 +${b.effect.storageBonus}`);
     if (b.effect.globalEfficiency) effectItems.push(`全局效率 +${Math.round(b.effect.globalEfficiency * 100)}%`);

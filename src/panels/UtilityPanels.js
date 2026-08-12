@@ -7,64 +7,71 @@ import { createElement, lucideIcon, formatNumber } from '../core/utils.js';
 import { RESOURCES, EXPLORE_REGIONS } from '../data/gamedata.js';
 import { bus } from '../core/EventBus.js';
 import { TutorialManager } from '../core/TutorialManager.js';
+import { textureManager } from '../core/TextureManager.js';
+import { TEXTURE_SLOTS, getTextureSlotsByCategory } from '../data/textureSlots.js';
+import { canStartExpedition, startExpedition } from '../core/ExplorationSystem.js';
+import { getInventoryQuantity } from '../core/ProductionSystem.js';
+import { saveManager } from '../core/SaveManager.js';
+import { getCurrentDailyResourceFlow, formatDailyRate } from '../core/ResourceFlowSystem.js';
 
 // ===== 探索面板 =====
 export function openExplorePanel() {
   const container = createElement('div', { className: 'explore-panel-inner' });
-  const list = createElement('div', { className: 'explore-regions' });
-
-  for (const region of EXPLORE_REGIONS) {
-    const explored = gameState.state.exploredRegions.includes(region.id);
-    const card = createElement('div', { className: 'region-card' });
-
-    card.appendChild(createElement('div', { style: { flex: '0 0 32px' } }, [
-      lucideIcon(explored ? 'check' : 'compass', 20),
-    ]));
-
-    const info = createElement('div', { style: { flex: '1' } });
-    info.appendChild(createElement('div', { style: { fontWeight: '700', marginBottom: '2px' } }, [region.name]));
-    info.appendChild(createElement('div', { style: { fontSize: '12px', color: 'var(--text-secondary)' } }, [region.desc]));
-    card.appendChild(info);
-
-    // Danger pips
-    const danger = createElement('div', { className: 'region-danger' });
-    for (let i = 0; i < 5; i++) {
-      danger.appendChild(createElement('div', {
-        className: `region-danger-pip ${i < region.danger ? 'active' : ''}`,
-      }));
-    }
-    card.appendChild(danger);
-
-    if (!explored) {
-      card.addEventListener('click', () => {
-        ui.showConfirm({
-          title: `探索 ${region.name}`,
-          text: `危险等级: ${region.danger}/5。确定派遣探索队吗？`,
-          icon: 'compass',
-          confirmText: '出发',
-          onConfirm: () => {
-            gameState.state.exploredRegions.push(region.id);
-            bus.emit('explore:start', region);
-            gameState.addNotification({
-              title: '探索队出发',
-              text: `探索队已前往${region.name}`,
-              type: 'event',
-              icon: 'compass',
-            });
-            ui.closeModal();
-          },
-        });
-      });
-    } else {
-      card.style.opacity = '0.5';
-    }
-
-    list.appendChild(card);
+  const selectedResident = gameState.state.residents[0]?.id || '';
+  let residentId = selectedResident;
+  const residentSelect = createElement('select', { className: 'settings-texture-select' });
+  for (const resident of gameState.state.residents) {
+    residentSelect.appendChild(createElement('option', { value: resident.id }, [`${resident.name} · 探索力${resident.exploration || 10} · 生存${resident.skills?.survival || 1}`]));
   }
-
+  residentSelect.addEventListener('change', () => { residentId = residentSelect.value; render(); });
+  container.appendChild(createSettingRow('考察居民', residentSelect));
+  const list = createElement('div', { className: 'explore-regions' });
   container.appendChild(list);
-  const content = ui.createModalContent('探索', 'compass', container);
-  ui.openModal(content, 'modal-md');
+
+  const render = () => {
+    list.replaceChildren();
+    const active = gameState.state.activeExploration;
+    if (active) {
+      const region = EXPLORE_REGIONS.find(entry => entry.id === active.regionId);
+      const resident = gameState.state.residents.find(entry => entry.id === active.residentId);
+      list.appendChild(createElement('div', { className: 'exploration-active' }, [
+        createElement('strong', {}, [`${resident?.name || '居民'}正在考察${region?.name || '未知区域'}`]),
+        createElement('span', {}, [`剩余 ${Math.ceil(active.remainingDays)} / ${active.totalDays} 天`]),
+      ]));
+    }
+
+    for (const region of EXPLORE_REGIONS) {
+      const explored = gameState.state.exploredRegions.includes(region.id);
+      const validation = canStartExpedition(region.id, residentId);
+      const card = createElement('div', { className: `region-card ${explored ? 'explored' : ''}` });
+      card.appendChild(createElement('div', { style: { flex: '0 0 32px' } }, [lucideIcon(explored ? 'check' : region.biome === 'snow' ? 'snowflake' : region.biome === 'desert' ? 'sun' : 'compass', 20)]));
+      const info = createElement('div', { style: { flex: '1' } });
+      info.appendChild(createElement('div', { style: { fontWeight: '700', marginBottom: '2px' } }, [region.name]));
+      info.appendChild(createElement('div', { style: { fontSize: '12px', color: 'var(--text-secondary)' } }, [region.desc]));
+      const requirements = [];
+      if (region.days) requirements.push(`${region.days}天`);
+      if (region.requiredExploration) requirements.push(`探索力${region.requiredExploration}`);
+      if (region.requiredSurvival) requirements.push(`生存${region.requiredSurvival}`);
+      if (region.supply) requirements.push(`补给 ${getInventoryQuantity(region.supply)}/1`);
+      if (requirements.length) info.appendChild(createElement('div', { className: 'exploration-requirements' }, [requirements.join(' · ')]));
+      if (!explored && !validation.ok) info.appendChild(createElement('div', { className: 'exploration-blocked' }, [validation.reason]));
+      card.appendChild(info);
+      if (!explored && !active) {
+        const button = createElement('button', { className: `btn btn-primary ${validation.ok ? '' : 'is-blocked'}`, title: validation.ok ? '开始考察' : validation.reason }, [lucideIcon('send', 14), document.createTextNode(' 出发')]);
+        button.addEventListener('click', () => {
+          const result = startExpedition(region.id, residentId);
+          if (!result.ok) gameState.addNotification({ title: '无法出发', text: result.reason, type: 'warning', icon: 'info' });
+          render();
+        });
+        card.appendChild(button);
+      }
+      list.appendChild(card);
+    }
+  };
+
+  render();
+  const content = ui.createModalContent('和平考察', 'compass', container);
+  ui.openModal(content, 'modal-lg');
 }
 
 // ===== 统计面板 =====
@@ -103,6 +110,7 @@ export function openStatsPanel() {
     style: { fontSize: '16px', fontWeight: '700', margin: '24px 0 12px', paddingBottom: '8px', borderBottom: '1px solid var(--border-subtle)' },
   }, ['资源总览']));
 
+  const dailyFlow = getCurrentDailyResourceFlow();
   const resGrid = createElement('div', { className: 'stats-grid' });
   for (const [key, val] of Object.entries(s.resources)) {
     const max = s.storage[key];
@@ -114,6 +122,11 @@ export function openStatsPanel() {
         document.createTextNode(' ' + resName),
       ].filter(Boolean)),
       createElement('div', { className: 'stat-card-value' }, [formatNumber(val)]),
+      createElement('div', { className: 'stat-card-flow' }, [
+        `产出 +${formatDailyRate(dailyFlow.production[key])}/天`,
+        dailyFlow.consumption[key] > 0 ? ` · 消耗 -${formatDailyRate(dailyFlow.consumption[key])}/天` : '',
+        ` · ${dailyFlow.net[key] >= 0 ? '净增 +' : '净减 -'}${formatDailyRate(Math.abs(dailyFlow.net[key]))}/天`,
+      ]),
       max !== Infinity ? createElement('div', { className: 'progress-bar', style: { marginTop: '4px' } }, [
         createElement('div', { className: 'progress-fill', style: { width: `${(val / max) * 100}%` } }),
       ]) : null,
@@ -159,6 +172,8 @@ export function openSettingsPanel() {
 
   container.appendChild(gameSection);
 
+  container.appendChild(createTextureSettings());
+
   // Display settings
   const displaySection = createElement('div', { className: 'settings-section' });
   displaySection.appendChild(createElement('h3', {}, ['显示']));
@@ -167,42 +182,7 @@ export function openSettingsPanel() {
   displaySection.appendChild(createSettingRow('高DPI渲染', createToggle(true)));
   container.appendChild(displaySection);
 
-  // Save/Load
-  const dataSection = createElement('div', { className: 'settings-section' });
-  dataSection.appendChild(createElement('h3', {}, ['数据']));
-
-  const saveBtn = createElement('button', { className: 'btn btn-primary' }, [
-    lucideIcon('save', 14),
-    document.createTextNode(' 保存游戏'),
-  ]);
-  saveBtn.addEventListener('click', () => {
-    try {
-      localStorage.setItem('stardust-colony-save', gameState.serialize());
-      gameState.addNotification({ title: '保存成功', text: '游戏数据已保存到本地存储', type: 'success', icon: 'save' });
-    } catch (e) {
-      gameState.addNotification({ title: '保存失败', text: e.message, type: 'warning', icon: 'alert-triangle' });
-    }
-  });
-
-  const loadBtn = createElement('button', { className: 'btn' }, [
-    lucideIcon('download', 14),
-    document.createTextNode(' 读取存档'),
-  ]);
-  loadBtn.addEventListener('click', () => {
-    const data = localStorage.getItem('stardust-colony-save');
-    if (data) {
-      ui.showConfirm({
-        title: '读取存档',
-        text: '当前进度将被覆盖，确定要读取存档吗？',
-        onConfirm: () => {
-          gameState.deserialize(data);
-          gameState.addNotification({ title: '读取成功', text: '存档已加载', type: 'success', icon: 'download' });
-        },
-      });
-    } else {
-      gameState.addNotification({ title: '无存档', text: '未找到本地存档数据', type: 'warning', icon: 'info' });
-    }
-  });
+  const dataSection = createSaveSettings();
 
   const resetBtn = createElement('button', { className: 'btn btn-danger' }, [
     lucideIcon('alert-triangle', 14),
@@ -214,19 +194,195 @@ export function openSettingsPanel() {
       text: '所有进度将被清除，此操作不可撤销！',
       confirmText: '确认重置',
       onConfirm: () => {
+        saveManager.clearActive();
         gameState.reset();
         location.reload();
       },
     });
   });
 
-  dataSection.appendChild(createElement('div', { style: { display: 'flex', gap: '12px', flexWrap: 'wrap' } }, [
-    saveBtn, loadBtn, resetBtn,
-  ]));
+  dataSection.appendChild(resetBtn);
   container.appendChild(dataSection);
 
   const content = ui.createModalContent('设置', 'settings', container);
   ui.openModal(content, 'modal-md');
+}
+
+function createSaveSettings() {
+  const section = createElement('div', { className: 'settings-section save-settings' });
+  section.appendChild(createElement('h3', {}, ['存档']));
+  const list = createElement('div', { className: 'save-slot-list' });
+  const render = () => {
+    list.replaceChildren();
+    for (const slot of saveManager.list()) {
+      const card = createElement('div', { className: 'save-slot' });
+      const name = createElement('input', { type: 'text', className: 'settings-pack-name', value: slot.name, maxlength: 30 });
+      const meta = createElement('div', { className: 'save-slot-meta' }, [slot.empty ? '空槽位' : `Y${slot.year} · 第${slot.day}天 · ${new Date(slot.savedAt).toLocaleString()}`]);
+      const save = createElement('button', { className: 'btn btn-primary' }, [lucideIcon('save', 13), document.createTextNode(' 保存')]);
+      save.addEventListener('click', () => { saveManager.save(slot.slotId, name.value); render(); });
+      const load = createElement('button', { className: 'btn', disabled: slot.empty }, [lucideIcon('download', 13), document.createTextNode(' 读取')]);
+      load.addEventListener('click', () => ui.showConfirm({ title: '读取存档', text: '当前未保存进度将被覆盖。', onConfirm: () => { saveManager.load(slot.slotId); location.reload(); } }));
+      const exportBtn = createElement('button', { className: 'btn', disabled: slot.empty }, ['导出']);
+      exportBtn.addEventListener('click', () => { const url=URL.createObjectURL(saveManager.export(slot.slotId)); const a=document.createElement('a'); a.href=url; a.download=`${name.value||`存档${slot.slotId}`}.json`; a.click(); URL.revokeObjectURL(url); });
+      const importInput = createElement('input', { type: 'file', accept: 'application/json,.json', style: { display: 'none' } });
+      const importBtn = createElement('button', { className: 'btn' }, ['导入']);
+      importBtn.addEventListener('click', () => importInput.click());
+      importInput.addEventListener('change', async () => { try { await saveManager.import(slot.slotId, importInput.files?.[0]); render(); } catch (error) { gameState.addNotification({ title:'导入失败', text:error.message, type:'warning', icon:'alert-triangle' }); } importInput.value=''; });
+      const remove = createElement('button', { className: 'btn btn-danger', disabled: slot.empty }, ['删除']);
+      remove.addEventListener('click', () => { saveManager.remove(slot.slotId); render(); });
+      card.append(name, meta, createElement('div', { className: 'save-slot-actions' }, [save, load, exportBtn, importBtn, remove, importInput]));
+      list.appendChild(card);
+    }
+  };
+  render();
+  section.appendChild(list);
+  return section;
+}
+
+function createTextureSettings() {
+  const section = createElement('div', { className: 'settings-section texture-settings' });
+  section.appendChild(createElement('h3', {}, ['自定义纹理']));
+  section.appendChild(createElement('p', { className: 'settings-hint' }, [
+    '上传 PNG 替换地形、建筑、居民或游客素材；没有素材时自动使用默认绘图。',
+  ]));
+
+  const slotSelect = createElement('select', { className: 'settings-texture-select' });
+  for (const slot of TEXTURE_SLOTS) {
+    slotSelect.appendChild(createElement('option', { value: slot.id }, [slot.label]));
+  }
+  section.appendChild(createSettingRow('素材槽位', slotSelect));
+
+  const hint = createElement('div', { className: 'texture-slot-hint' });
+  const preview = createElement('img', { className: 'texture-preview', alt: '纹理预览' });
+  const status = createElement('div', { className: 'texture-status' });
+  const fileInput = createElement('input', { type: 'file', accept: 'image/png', style: { display: 'none' } });
+  const packInput = createElement('input', { type: 'file', accept: 'application/json,.json', style: { display: 'none' } });
+
+  const refresh = () => {
+    const slot = TEXTURE_SLOTS.find((entry) => entry.id === slotSelect.value);
+    const record = textureManager.getRecord(slot.id);
+    const image = textureManager.getImage(slot.id);
+    hint.textContent = slot.hint;
+    if (image) {
+      preview.src = typeof image.src === 'string' ? image.src : '';
+      if (!preview.src) {
+        const canvas = document.createElement('canvas');
+        canvas.width = image.width;
+        canvas.height = image.height;
+        canvas.getContext('2d').drawImage(image, 0, 0);
+        preview.src = canvas.toDataURL('image/png');
+      }
+      preview.style.display = 'block';
+      status.textContent = `${record.width}×${record.height}，${Math.ceil(record.size / 1024)}KB，已启用自定义素材`;
+    } else {
+      preview.removeAttribute('src');
+      preview.style.display = 'none';
+      status.textContent = '当前使用默认程序绘图';
+    }
+  };
+
+  const uploadButton = createElement('button', { className: 'btn btn-primary' }, [
+    lucideIcon('upload', 14), document.createTextNode(' 上传 PNG'),
+  ]);
+  uploadButton.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files?.[0];
+    fileInput.value = '';
+    if (!file) return;
+    uploadButton.disabled = true;
+    status.textContent = '正在读取素材…';
+    try {
+      await textureManager.install(slotSelect.value, file);
+      gameState.addNotification({ title: '纹理已更新', text: '自定义素材已应用到游戏画面', type: 'success', icon: 'image' });
+    } catch (error) {
+      gameState.addNotification({ title: '纹理上传失败', text: error.message, type: 'warning', icon: 'alert-triangle' });
+    } finally {
+      uploadButton.disabled = false;
+      refresh();
+    }
+  });
+
+  const resetButton = createElement('button', { className: 'btn' }, [
+    lucideIcon('rotate-ccw', 14), document.createTextNode(' 恢复默认'),
+  ]);
+  resetButton.addEventListener('click', async () => {
+    await textureManager.remove(slotSelect.value);
+    refresh();
+  });
+
+  const clearButton = createElement('button', { className: 'btn btn-danger' }, [
+    lucideIcon('trash-2', 14), document.createTextNode(' 清除全部纹理'),
+  ]);
+
+  const packName = createElement('input', {
+    type: 'text',
+    className: 'settings-pack-name',
+    placeholder: '纹理包名称',
+    value: '我的星尘纹理',
+    maxlength: 40,
+  });
+  const exportButton = createElement('button', { className: 'btn' }, [
+    lucideIcon('package', 14), document.createTextNode(' 导出纹理包'),
+  ]);
+  exportButton.addEventListener('click', async () => {
+    exportButton.disabled = true;
+    try {
+      const blob = await textureManager.exportPack(packName.value.trim() || '我的星尘纹理');
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${(packName.value.trim() || 'stardust-textures').replace(/[\\/:*?"<>|]/g, '_')}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      gameState.addNotification({ title: '导出成功', text: '纹理包已下载', type: 'success', icon: 'download' });
+    } catch (error) {
+      gameState.addNotification({ title: '导出失败', text: error.message, type: 'warning', icon: 'alert-triangle' });
+    } finally {
+      exportButton.disabled = false;
+    }
+  });
+
+  const importButton = createElement('button', { className: 'btn' }, [
+    lucideIcon('upload-cloud', 14), document.createTextNode(' 导入纹理包'),
+  ]);
+  importButton.addEventListener('click', () => packInput.click());
+  packInput.addEventListener('change', async () => {
+    const file = packInput.files?.[0];
+    packInput.value = '';
+    if (!file) return;
+    importButton.disabled = true;
+    status.textContent = '正在校验纹理包…';
+    try {
+      const result = await textureManager.importPack(file);
+      gameState.addNotification({ title: '导入成功', text: `已安装 ${result.count} 张纹理`, type: 'success', icon: 'package' });
+      refresh();
+    } catch (error) {
+      gameState.addNotification({ title: '导入失败', text: error.message, type: 'warning', icon: 'alert-triangle' });
+      refresh();
+    } finally {
+      importButton.disabled = false;
+    }
+  });
+  clearButton.addEventListener('click', () => {
+    ui.showConfirm({
+      title: '清除全部纹理',
+      text: '所有自定义素材将恢复为默认绘图，确定继续吗？',
+      confirmText: '确认清除',
+      onConfirm: async () => {
+        await textureManager.clearAll();
+        refresh();
+      },
+    });
+  });
+
+  const controls = createElement('div', { className: 'texture-controls' }, [uploadButton, resetButton, clearButton, fileInput]);
+  const packControls = createElement('div', { className: 'texture-pack-controls' }, [packName, exportButton, importButton, packInput]);
+  section.appendChild(createElement('div', { className: 'texture-preview-row' }, [preview, createElement('div', {}, [hint, status])]));
+  section.appendChild(controls);
+  section.appendChild(packControls);
+  slotSelect.addEventListener('change', refresh);
+  refresh();
+  return section;
 }
 
 function createSettingRow(label, control) {
