@@ -27,6 +27,24 @@ export function updateTouristSystem() {
   const day = gameState.state.day;
   const buildings = gameState.state.buildings.filter(b => b.built);
 
+  // 检查游客是否该离开（停留3-8天后离开）
+  const leaving = activeTourists.filter(t => day - t.visitDay >= (t.stayDuration || 5));
+  if (leaving.length > 0) {
+    for (const t of leaving) {
+      activeTourists = activeTourists.filter(at => at !== t);
+    }
+    bus.emit('tourist:leaving', { tourists: leaving });
+    if (leaving.length > 0) {
+      gameState.addNotification({
+        title: '游客离开',
+        text: `${leaving.length}名外星游客结束了愉快的旅程，离开了殖民地。`,
+        type: 'event',
+        icon: 'plane-takeoff',
+        duration: 3000,
+      });
+    }
+  }
+
   // 计算旅游吸引力（基于文化类建筑）
   let tourismAttraction = 0;
   for (const b of buildings) {
@@ -85,6 +103,7 @@ export function updateTouristSystem() {
       budget,
       spent: 0,
       visitDay: day,
+      stayDuration: 3 + Math.floor(Math.random() * 6), // 停留3-8天
       mood: 70 + Math.random() * 20,
     };
     newTourists.push(tourist);
@@ -173,11 +192,6 @@ function processTouristSpending(tourists, buildings) {
   if (totalHappinessGain > 0) {
     gameState.set('happiness', Math.min(100, gameState.state.happiness + totalHappinessGain));
   }
-
-  // 游客离开（简化：消费完即离开，但精灵会在地图上停留一段时间）
-  setTimeout(() => {
-    activeTourists = activeTourists.filter(t => !tourists.includes(t));
-  }, 10000);
 }
 
 /**

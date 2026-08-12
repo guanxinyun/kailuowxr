@@ -259,6 +259,9 @@
   cursor: pointer;
   transition: all var(--transition-fast);
   font-size: var(--fs-md);
+  color: var(--text-primary);
+  font-family: var(--font-main);
+  line-height: 1.5;
 }
 .event-choice-btn:hover {
   background: var(--bg-card-hover);

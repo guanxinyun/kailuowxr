@@ -54,9 +54,9 @@ export function openBuildPanel() {
       // Header
       const header = createElement('div', { className: 'building-card-header' }, [
         createElement('div', { className: 'building-icon' }, [lucideIcon(b.icon, 24)]),
-        createElement('div', {}, [
+        createElement('div', { style: { flex: '1', minWidth: '0' } }, [
           createElement('div', { className: 'building-name' }, [b.name]),
-          createElement('div', { className: 'building-subtitle' }, [b.desc.slice(0, 20) + '...']),
+          createElement('div', { className: 'building-subtitle', title: b.desc }, [b.desc]),
         ]),
       ]);
       card.appendChild(header);
@@ -159,6 +159,33 @@ export function openBuildPanel() {
       })(),
     ]);
     preview.appendChild(header);
+
+    // 完整描述
+    preview.appendChild(createElement('div', {
+      className: 'build-preview-desc',
+      style: { fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.6', marginBottom: 'var(--sp-3)' },
+    }, [b.desc]));
+
+    // 效果说明
+    const effectItems = [];
+    if (b.effect.metal) effectItems.push(`金属 +${b.effect.metal}`);
+    if (b.effect.crystal) effectItems.push(`晶体 +${b.effect.crystal}`);
+    if (b.effect.energy) effectItems.push(`能量 +${b.effect.energy}`);
+    if (b.effect.food) effectItems.push(`食物 +${b.effect.food}`);
+    if (b.effect.research) effectItems.push(`研究 +${b.effect.research}`);
+    if (b.effect.population) effectItems.push(`人口上限 +${b.effect.population}`);
+    if (b.effect.happiness) effectItems.push(`幸福度 +${b.effect.happiness}`);
+    if (b.effect.defense) effectItems.push(`防御 +${b.effect.defense}`);
+    if (b.effect.tourism) effectItems.push(`旅游 +${b.effect.tourism}`);
+    if (b.effect.income) effectItems.push(`收入 +${b.effect.income}`);
+    if (b.effect.trade) effectItems.push('解锁贸易');
+    if (b.effect.storageBonus) effectItems.push(`存储 +${b.effect.storageBonus}`);
+    if (b.effect.globalEfficiency) effectItems.push(`全局效率 +${Math.round(b.effect.globalEfficiency * 100)}%`);
+    if (effectItems.length > 0) {
+      preview.appendChild(createElement('div', {
+        style: { fontSize: '12px', color: 'var(--text-accent)', marginBottom: 'var(--sp-3)', padding: 'var(--sp-2) var(--sp-3)', background: 'rgba(100,140,255,0.08)', borderRadius: 'var(--radius-sm)' },
+      }, [`效果：${effectItems.join('、')}`]));
+    }
 
     if (b.flavor) {
       preview.appendChild(createElement('div', { className: 'build-preview-flavor' }, [b.flavor]));

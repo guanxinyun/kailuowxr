@@ -28,6 +28,19 @@ function init() {
   const map = generateMap(32, Math.floor(Math.random() * 10000));
   gameState.set('map', map);
 
+  // 在地图中心放置降落点（开局建筑）
+  const center = Math.floor(32 / 2);
+  const landingPad = {
+    id: 'bld_landing',
+    buildingId: 'landing_pad',
+    x: center,
+    y: center,
+    built: true,
+    progress: 1,
+  };
+  gameState.addBuilding(landingPad);
+  map[center][center].building = 'landing_pad';
+
   // Setup UI components
   setupTopBar();
   setupToolPanel();

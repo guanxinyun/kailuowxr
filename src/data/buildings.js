@@ -15,6 +15,20 @@ export const BUILDING_CATEGORIES = [
 export const BUILDINGS = [
   // ===== 基础 =====
   {
+    id: 'landing_pad',
+    name: '降落点',
+    category: 'basic',
+    icon: 'rocket',
+    desc: '殖民飞船的着陆点，殖民地的起源和中心。提供基础居住和能源。',
+    flavor: '一切伟大的旅程，都从第一步开始。',
+    cost: {},
+    buildTime: 0,
+    size: [3, 3],
+    gravity: { comfort: 2, adventure: 1, knowledge: 1 },
+    effect: { population: 4, energy: 2 },
+    unlockTech: null,
+  },
+  {
     id: 'habitat',
     name: '居住舱',
     category: 'basic',

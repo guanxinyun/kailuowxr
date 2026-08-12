@@ -78,6 +78,18 @@ export class CanvasRenderer {
       this._dynamicDirty = true;
     });
 
+    // 外星游客离开时移除精灵
+    bus.on('tourist:leaving', ({ tourists }) => {
+      for (const t of tourists) {
+        // 找到对应的精灵并移除
+        const sprite = this.spriteManager.touristSprites.find(s => s.resident.id === t.id);
+        if (sprite) {
+          this.spriteManager.removeTourist(sprite);
+        }
+      }
+      this._dynamicDirty = true;
+    });
+
     window.addEventListener('resize', () => this._resize());
   }
 

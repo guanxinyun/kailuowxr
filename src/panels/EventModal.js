@@ -7,7 +7,14 @@ import { ui } from '../core/UIManager.js';
 import { aiAdvisor } from '../core/AIAdvisor.js';
 import { AI_REQUEST_TYPES } from '../ai/AIPrompts.js';
 import { createElement, lucideIcon } from '../core/utils.js';
-import { EVENTS } from '../data/gamedata.js';
+import { EVENTS, RESOURCES } from '../data/gamedata.js';
+
+// 效果key的中文映射
+const EFFECT_NAMES = {
+  metal: '金属', crystal: '晶体', energy: '能量', food: '食物',
+  research: '研究点', credits: '星币', happiness: '幸福度',
+  diplomacy: '外交', defense: '防御', culture: '文化',
+};
 
 export function triggerRandomEvent() {
   const eligible = EVENTS.filter(e => gameState.state.day >= e.minDay);
@@ -96,7 +103,7 @@ export function showEventModal(event) {
       }, [
         createElement('p', { style: { marginBottom: '8px' } }, [choice.result]),
         createElement('div', { style: { fontSize: '12px', color: 'var(--text-dim)' } }, [
-          Object.entries(choice.effect).map(([k, v]) => `${k}: ${v > 0 ? '+' : ''}${v}`).join('  '),
+          Object.entries(choice.effect).map(([k, v]) => `${EFFECT_NAMES[k] || k}: ${v > 0 ? '+' : ''}${v}`).join('  '),
         ]),
       ]));
 
