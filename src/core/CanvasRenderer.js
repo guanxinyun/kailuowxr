@@ -11,6 +11,7 @@ import { TILE_TYPES, GRAVITY_CONFIG } from '../data/gamedata.js';
 import { getBuildingById } from '../data/buildings.js';
 import { clamp, lucideIcon } from './utils.js';
 import { ResidentSpriteManager } from './ResidentSprites.js';
+import { textureManager } from './TextureManager.js';
 
 const TILE_W = 64;
 const TILE_H = 32;
@@ -25,6 +26,8 @@ const TILE_COLORS = {
   ruins:    { top: '#5A5A70', sides: '#484860', highlight: '#707088', stone: '#8888A0' },
   crater:   { top: '#3A3A48', sides: '#2E2E3A', highlight: '#505060' },
   forest:   { top: '#2E7A3E', sides: '#246830', highlight: '#3E8E50', tree: '#1E6030' },
+  snow:     { top: '#D8ECF2', sides: '#A8C8D8', highlight: '#F2FCFF' },
+  desert:   { top: '#C88A45', sides: '#9A642F', highlight: '#E8B66A' },
 };
 
 // 装饰物种子随机
@@ -36,8 +39,9 @@ function seededRandom(x, y, seed = 0) {
 }
 
 export class CanvasRenderer {
-  constructor(container) {
+  constructor(container, textures = textureManager) {
     this.container = container;
+    this.textures = textures;
     this.terrainCanvas = container.querySelector('#canvas-terrain');
     this.dynamicCanvas = container.querySelector('#canvas-dynamic');
     this.heatmapCanvas = container.querySelector('#canvas-heatmap');
@@ -59,7 +63,7 @@ export class CanvasRenderer {
     this._animFrame = null;
 
     // 居民精灵管理器
-    this.spriteManager = new ResidentSpriteManager();
+    this.spriteManager = new ResidentSpriteManager(this.textures);
 
     // 动画时间
     this._time = 0;
@@ -69,6 +73,10 @@ export class CanvasRenderer {
 
     bus.on('building:placed', () => { this._terrainDirty = true; this._dynamicDirty = true; });
     bus.on('state:gravityOverlay', () => { this._heatmapDirty = true; });
+    bus.on('textures:changed', ({ slotId } = {}) => {
+      if (!slotId || slotId.startsWith('terrain.') || slotId.startsWith('building.') || !slotId) this._terrainDirty = true;
+      if (!slotId || slotId.startsWith('resident.') || slotId.startsWith('tourist.')) this._dynamicDirty = true;
+    });
 
     // 外星游客到达时添加精灵
     bus.on('tourist:arrived', ({ tourists, species }) => {
@@ -79,6 +87,14 @@ export class CanvasRenderer {
     });
 
     // 外星游客离开时移除精灵
+    bus.on('tourist:destination', ({ tourist, building }) => {
+      const sprite = this.spriteManager.touristSprites.find(s => s.resident.id === tourist.id);
+      const map = gameState.state.map;
+      if (sprite && map) {
+        sprite.navigateTo(map, Math.floor(sprite.gridX), Math.floor(sprite.gridY), building.x, building.y);
+      }
+    });
+
     bus.on('tourist:leaving', ({ tourists }) => {
       for (const t of tourists) {
         // 找到对应的精灵并移除
@@ -101,7 +117,9 @@ export class CanvasRenderer {
       canvas.height = rect.height * dpr;
       canvas.style.width = rect.width + 'px';
       canvas.style.height = rect.height + 'px';
-      canvas.getContext('2d').scale(dpr, dpr);
+      const context = canvas.getContext('2d');
+      context.imageSmoothingEnabled = false;
+      context.scale(dpr, dpr);
     }
     this.width = rect.width;
     this.height = rect.height;
@@ -283,6 +301,15 @@ export class CanvasRenderer {
    * 开罗风格等距瓦片
    */
   _drawKairoTile(ctx, x, y, tile) {
+    const customImage = this.textures.getImage(`terrain.${tile.type}`);
+    if (customImage) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(customImage, x - customImage.width / 2, y - customImage.height + TILE_H);
+      ctx.restore();
+      return;
+    }
+
     const colors = TILE_COLORS[tile.type] || TILE_COLORS.plains;
     const hw = TILE_W / 2;
     const hh = TILE_H / 2;
@@ -369,6 +396,16 @@ export class CanvasRenderer {
         break;
       case 'crater':
         this._drawCraterDecor(ctx, x, y, rng, colors);
+        break;
+      case 'snow':
+        ctx.fillStyle = '#F4FCFF';
+        ctx.fillRect(x - 8, y + TILE_H / 2 - 2, 6, 2);
+        ctx.fillRect(x + 5, y + TILE_H / 2 + 2, 4, 1);
+        break;
+      case 'desert':
+        ctx.strokeStyle = '#E2AA61';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x - 12, y + 12); ctx.quadraticCurveTo(x, y + 7, x + 12, y + 12); ctx.stroke();
         break;
     }
   }
@@ -524,6 +561,17 @@ export class CanvasRenderer {
     const data = getBuildingById(building.buildingId);
     if (!data) return;
 
+    if (building.built) {
+      const customImage = this.textures.getImage(`building.${building.buildingId}`);
+      if (customImage) {
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(customImage, x - customImage.width / 2, y + TILE_H / 2 - customImage.height);
+        ctx.restore();
+        return;
+      }
+    }
+
     const hw = TILE_W / 2;
     const hh = TILE_H / 2;
     const bh = building.built ? 20 : 12; // 建筑高度
@@ -646,6 +694,15 @@ export class CanvasRenderer {
    * 开罗风格道路渲染 - 扁平的发光通道
    */
   _drawRoad(ctx, x, y, building) {
+    const customImage = this.textures.getImage('building.road');
+    if (customImage) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(customImage, x - customImage.width / 2, y + TILE_H / 2 - customImage.height);
+      ctx.restore();
+      return;
+    }
+
     const hw = TILE_W / 2;
     const hh = TILE_H / 2;
 

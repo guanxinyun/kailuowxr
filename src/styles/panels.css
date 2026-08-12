@@ -2,6 +2,235 @@
    星尘殖民地 — 外交面板 + 居民面板 + 年终评比
    ============================================ */
 
+.resident-growth-summary { margin: var(--sp-3) 0; }
+.resident-growth-header { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: var(--fs-xs); }
+.resident-growth-header span, .resident-housing-stage { color: var(--text-secondary); }
+.resident-housing-stage { margin-top: 4px; font-size: 11px; }
+.resident-growth-stats { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: var(--sp-3) 0; }
+.resident-growth-stats span { padding: 4px 7px; color: var(--text-accent); background: rgba(100,140,255,0.1); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); font-size: 11px; }
+.resident-proficiency { margin-top: var(--sp-3); }
+.resident-proficiency h4 { margin-bottom: var(--sp-2); }
+.proficiency-row { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: 4px; font-size: 11px; }
+.proficiency-row > span:first-child { min-width: 34px; }
+.proficiency-row .progress-bar { flex: 1; }
+.proficiency-row > span:last-child { min-width: 28px; text-align: right; color: var(--text-secondary); }
+
+
+/* ======== 自定义纹理设置 ======== */
+.save-slot-list { display:flex; flex-direction:column; gap:var(--sp-2); margin-bottom:var(--sp-3); }
+.save-slot { padding:var(--sp-3); background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:var(--radius-sm); }
+.save-slot-meta { margin:4px 0 8px; color:var(--text-dim); font-size:11px; }
+.save-slot-actions { display:flex; flex-wrap:wrap; gap:var(--sp-2); }
+.texture-settings .settings-hint,
+.texture-slot-hint,
+.texture-status {
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+}
+.texture-settings .settings-texture-select {
+  min-width: 220px;
+  max-width: 100%;
+  padding: 6px 8px;
+  color: var(--text-primary);
+  background: var(--bg-input, rgba(255,255,255,0.08));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+.texture-preview-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  min-height: 76px;
+  margin-top: var(--sp-3);
+}
+.texture-preview {
+  display: none;
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  background-color: #1a1a28;
+  background-image: linear-gradient(45deg, #25253a 25%, transparent 25%), linear-gradient(-45deg, #25253a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #25253a 75%), linear-gradient(-45deg, transparent 75%, #25253a 75%);
+  background-size: 12px 12px;
+  background-position: 0 0, 0 6px, 6px -6px, -6px 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+.texture-controls,
+.texture-pack-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+}
+.settings-pack-name {
+  min-width: 180px;
+  flex: 1;
+  padding: 6px 8px;
+  color: var(--text-primary);
+  background: var(--bg-input, rgba(255,255,255,0.08));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.ai-content-status { display:flex; align-items:center; justify-content:space-between; gap:var(--sp-3); padding:var(--sp-3); background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:var(--radius-sm); }
+.ai-content-status > div { display:flex; flex-direction:column; gap:3px; }
+.ai-content-status span, .ai-content-accepted { color:var(--text-secondary); font-size:11px; }
+.ai-config-box { display:flex; flex-direction:column; gap:var(--sp-2); padding:var(--sp-3); margin-top:var(--sp-3); background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:var(--radius-sm); }
+.ai-config-box h3 { margin:0; }
+.ai-instruction { width:100%; min-height:72px; margin-top:var(--sp-3); padding:var(--sp-2); resize:vertical; color:var(--text-primary); background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:var(--radius-sm); }
+.btn.is-blocked { opacity:.65; }
+.ai-content-actions, .ai-proposal-buttons { display:flex; flex-wrap:wrap; gap:var(--sp-2); margin-top:var(--sp-3); }
+.ai-proposal-list h3 { margin:var(--sp-4) 0 var(--sp-2); }
+.ai-proposal-card { padding:var(--sp-3); margin-bottom:var(--sp-2); background:var(--bg-card); border:1px solid var(--border-subtle); border-left:3px solid var(--text-accent); border-radius:var(--radius-sm); }
+.ai-proposal-header { display:flex; justify-content:space-between; gap:var(--sp-2); }
+.ai-proposal-header span, .ai-proposal-summary { color:var(--text-accent); font-size:11px; }
+.ai-proposal-card p { margin:5px 0; color:var(--text-secondary); font-size:var(--fs-xs); }
+.ai-content-accepted { margin-top:var(--sp-4); text-align:center; }
+
+.annual-facts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--sp-2);
+  margin: var(--sp-4) 0;
+}
+.annual-facts span {
+  padding: 5px 8px;
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+}
+
+.exploration-active { display:flex; justify-content:space-between; gap:var(--sp-3); padding:var(--sp-3); margin-bottom:var(--sp-3); color:var(--text-accent); background:rgba(100,140,255,.1); border:1px solid var(--border-glow); border-radius:var(--radius-sm); }
+.exploration-requirements { margin-top:4px; color:var(--text-accent); font-size:11px; }
+.exploration-blocked { margin-top:3px; color:#e48282; font-size:11px; }
+.region-card.explored { opacity:.55; }
+
+/* ======== 旅游观察面板 ======== */
+.tourism-panel-inner h3 { margin: var(--sp-3) 0 var(--sp-2); font-size: var(--fs-md); }
+.tourism-attraction, .tourism-visitor {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  margin-bottom: var(--sp-2);
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+}
+.tourism-attraction strong { color: var(--text-primary); }
+.tourism-attraction span { color: #7bd88f; }
+.tourism-attraction.offline { opacity: 0.55; }
+.tourism-attraction.offline span { color: #e48282; }
+.tourism-visitor { display: block; }
+.tourism-visitor-header { display: flex; justify-content: space-between; gap: var(--sp-2); }
+.tourism-visitor-header strong { color: var(--text-primary); }
+.tourism-preference, .tourism-itinerary, .tourism-progress { margin-top: 4px; color: var(--text-secondary); font-size: 11px; }
+.tourism-itinerary { color: var(--text-accent); }
+
+/* ======== 设施管理面板 ======== */
+.managed-combos h3 { margin: var(--sp-3) 0 var(--sp-2); font-size: var(--fs-md); }
+.managed-combo {
+  display: flex;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  margin-bottom: var(--sp-2);
+  background: rgba(120, 170, 255, 0.08);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+.managed-combo.inactive { opacity: 0.55; filter: grayscale(0.5); }
+.managed-combo-icon { color: var(--text-accent); }
+.managed-combo-info { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-xs); color: var(--text-secondary); }
+.managed-combo-info strong { color: var(--text-primary); font-size: var(--fs-sm); }
+.managed-combo-info span { color: var(--text-accent); }
+.managed-building-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+}
+.managed-building {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid #5fbd7a;
+  border-radius: var(--radius-sm);
+}
+.managed-building.offline { border-left-color: #d66c6c; opacity: 0.82; }
+.managed-building-icon { color: var(--text-accent); }
+.managed-building-info { flex: 1; min-width: 0; }
+.managed-building-location { color: var(--text-dim); font-size: 11px; }
+.managed-building-status { margin-top: 2px; font-size: var(--fs-xs); }
+.managed-building-status.online { color: #7bd88f; }
+.managed-building-status.offline { color: #e48282; }
+.managed-building-max { color: var(--text-dim); font-size: var(--fs-xs); }
+
+/* ======== 生产加工面板 ======== */
+.production-panel-inner h3 {
+  margin: var(--sp-3) 0 var(--sp-2);
+  font-size: var(--fs-md);
+}
+.production-inventory {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.production-inventory h3 { width: 100%; }
+.production-inventory-item {
+  padding: 5px 9px;
+  color: var(--text-primary);
+  background: rgba(120, 170, 255, 0.12);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+}
+.production-empty { color: var(--text-dim); font-size: var(--fs-xs); }
+.production-job {
+  padding: var(--sp-2) var(--sp-3);
+  margin-bottom: var(--sp-2);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+.production-job-header, .production-recipe {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.production-job-header { justify-content: space-between; font-size: var(--fs-xs); }
+.production-progress {
+  height: 5px;
+  margin-top: var(--sp-2);
+  overflow: hidden;
+  background: rgba(255,255,255,0.08);
+  border-radius: var(--radius-full);
+}
+.production-progress span { display: block; height: 100%; background: var(--text-accent); border-radius: inherit; }
+.production-recipe {
+  align-items: stretch;
+  padding: var(--sp-3);
+  margin-bottom: var(--sp-2);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+.production-recipe-icon { padding-top: 2px; color: var(--text-accent); }
+.production-recipe-details { flex: 1; min-width: 0; }
+.production-recipe-details p { margin: 3px 0; color: var(--text-secondary); font-size: var(--fs-xs); }
+.production-cost, .production-output { color: var(--text-dim); font-size: 11px; }
+.production-output { color: var(--text-accent); margin-top: 3px; }
+
 /* ======== 外交面板 ======== */
 .diplomacy-panel .modal-body {
   padding: var(--sp-4) var(--sp-6);

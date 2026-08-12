@@ -9,6 +9,7 @@ import { createElement, lucideIcon } from '../core/utils.js';
 import { GRAVITY_CONFIG } from '../data/gamedata.js';
 import { getMoodLabel, getMoodColor, GRAVITY_LABELS } from '../data/residents.js';
 import { createRadarChart } from './DiplomacyPanel.js';
+import { getGrowthSummary } from '../core/ResidentGrowthSystem.js';
 
 export function openResidentPanel() {
   const container = createElement('div', { className: 'resident-panel-inner' });
@@ -64,6 +65,26 @@ function createResidentCard(resident) {
   const detail = createElement('div', { className: 'resident-detail' });
   const inner = createElement('div', { className: 'resident-detail-inner' });
 
+  const growth = getGrowthSummary(resident);
+  const xpPercent = Math.min(100, (growth.xp / growth.xpToNext) * 100);
+  inner.appendChild(createElement('div', { className: 'resident-growth-summary' }, [
+    createElement('div', { className: 'resident-growth-header' }, [
+      createElement('strong', {}, [`成长 Lv.${growth.level}`]),
+      createElement('span', {}, [`${growth.xp} / ${growth.xpToNext} XP`]),
+    ]),
+    createElement('div', { className: 'progress-bar' }, [
+      createElement('div', { className: 'progress-fill', style: { width: `${xpPercent}%` } }),
+    ]),
+    createElement('div', { className: 'resident-housing-stage' }, [`住宅阶段 ${growth.housingStage}${growth.housingStage === 3 ? ' · 完整翻修' : growth.housingStage === 2 ? ' · 扩建解锁' : ' · 基础居所'}`]),
+  ]));
+
+  const growthStats = createElement('div', { className: 'resident-growth-stats' }, [
+    createElement('span', {}, [`体力 ${growth.stamina}`]),
+    createElement('span', {}, [`劳动力 ${growth.labor}`]),
+    createElement('span', {}, [`探索力 ${growth.exploration}`]),
+  ]);
+  inner.appendChild(growthStats);
+
   // Mood
   const moodColor = getMoodColor(resident.mood);
   const moodLabel = getMoodLabel(resident.mood);
@@ -85,10 +106,10 @@ function createResidentCard(resident) {
   const skillsSection = createElement('div', { className: 'resident-stats' }, [
     createElement('h4', {}, ['技能']),
   ]);
-  for (const [skill, val] of Object.entries(resident.skills)) {
+  for (const [skill, val] of Object.entries(resident.skills).filter(([skill]) => skill !== 'combat')) {
     const skillNames = {
       engineering: '工程', research: '研究', farming: '农业',
-      combat: '战斗', social: '社交', survival: '生存',
+      social: '社交', survival: '生存',
     };
     skillsSection.appendChild(createElement('div', { className: 'stat-bar' }, [
       createElement('span', { style: { fontSize: '12px', minWidth: '36px' } }, [skillNames[skill] || skill]),
@@ -99,6 +120,21 @@ function createResidentCard(resident) {
     ]));
   }
   inner.appendChild(skillsSection);
+
+  const proficiencySection = createElement('div', { className: 'resident-proficiency' }, [
+    createElement('h4', {}, ['职业熟练度']),
+  ]);
+  const proficiencyNames = { engineering: '工程', research: '研究', farming: '农业', social: '社交', survival: '探索' };
+  for (const [skill, value] of Object.entries(growth.proficiency)) {
+    proficiencySection.appendChild(createElement('div', { className: 'proficiency-row' }, [
+      createElement('span', {}, [proficiencyNames[skill] || skill]),
+      createElement('div', { className: 'progress-bar' }, [
+        createElement('div', { className: 'progress-fill', style: { width: `${value}%` } }),
+      ]),
+      createElement('span', {}, [`${value}%`]),
+    ]));
+  }
+  inner.appendChild(proficiencySection);
 
   // Diary
   const diary = createElement('div', { className: 'resident-diary' }, [

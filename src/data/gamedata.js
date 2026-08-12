@@ -98,6 +98,8 @@ export const TILE_TYPES = {
   ruins:     { name: '遗迹',   color: '#1a1a2a', buildable: false, icon: 'landmark', explorable: true },
   crater:    { name: '陨石坑', color: '#1a1a1a', buildable: false, icon: 'circle-dot' },
   forest:    { name: '异星林', color: '#0a2a1a', buildable: true,  icon: 'trees', resource: 'nature' },
+  snow:      { name: '寒霜原', color: '#b8d8e8', buildable: true,  icon: 'snowflake', resource: 'ice_core' },
+  desert:    { name: '赤沙地', color: '#b87a38', buildable: true,  icon: 'sun', resource: 'sun_crystal' },
 };
 
 // ===== 引力维度配置 =====
@@ -128,6 +130,8 @@ export const EXPLORE_REGIONS = [
   { id: 'deep_forest',    name: '异星密林',     danger: 3, distance: 3, rewards: ['nature', 'food'], desc: '茂密的外星植被区域，生态系统复杂且未知。' },
   { id: 'volcano_rim',    name: '火山边缘',     danger: 4, distance: 3, rewards: ['metal', 'energy'], desc: '活跃火山的边缘地带，高温高压但资源丰富。' },
   { id: 'signal_source',  name: '信号源',       danger: 5, distance: 4, rewards: ['research', 'contact'], desc: '神秘信号的发射源头，可能是外星文明的前哨站。' },
+  { id: 'snow_frontier', name: '寒霜边界考察', difficulty: 3, distance: 3, biome: 'snow', days: 5, requiredExploration: 12, requiredSurvival: 3, supply: 'thermal_kit', rewards: { crystal: 12, research: 8, ice_core: 2 }, desc: '记录寒霜原的生态循环与地下冰核。' },
+  { id: 'desert_frontier', name: '赤沙边界考察', difficulty: 4, distance: 4, biome: 'desert', days: 6, requiredExploration: 14, requiredSurvival: 4, supply: 'cooling_kit', rewards: { metal: 18, research: 10, sun_crystal: 2 }, desc: '调查赤沙地的昼夜温差与太阳晶体。' },
 ];
 
 // ===== 季节配置 =====

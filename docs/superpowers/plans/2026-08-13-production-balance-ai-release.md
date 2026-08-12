@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make resource flows understandable and configurable, enrich deterministic AI-assisted narration and onboarding, formalize tests, shrink context packs, and ship the verified result.
+**Goal:** Make resource flows understandable and configurable, enrich deterministic AI-assisted narration, formalize tests, and ship the verified result. Expanded onboarding and compact context packs were deferred by the user on 2026-08-13.
 
 **Architecture:** Pure modules calculate balance values, daily resource flows, AI facts/triggers, and tutorial state; runtime and DOM panels consume those modules. Core values remain local and deterministic, while AI only decorates validated facts and always has a fallback.
 

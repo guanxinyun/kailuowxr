@@ -142,44 +142,46 @@ function reconstructPath(node) {
  * 使用BFS从建筑位置搜索到任意有指挥部的位置
  */
 export function isConnectedToHQ(map, buildings, bx, by) {
-  // 找到指挥部位置（建筑列表中没有单独的HQ，初始地图中心就是）
-  // 简化：检查是否能通过道路/建筑网络到达地图中心区域
-  const mapSize = map.length;
-  const center = Math.floor(mapSize / 2);
-
-  // BFS搜索道路连通性
-  const visited = new Set();
-  const queue = [{ x: bx, y: by }];
-  visited.add(key(bx, by));
+  if (!map?.length) return false;
+  const headquarters = buildings.find((building) => building.built && building.buildingId === 'landing_pad');
+  if (!headquarters) return false;
+  if (bx === headquarters.x && by === headquarters.y) return true;
 
   const cols = map[0].length;
-  function key(x, y) { return y * cols + x; }
-
+  const key = (x, y) => y * cols + x;
+  const builtRoads = new Set(
+    buildings
+      .filter((building) => building.built && building.buildingId === 'road')
+      .map((building) => key(building.x, building.y)),
+  );
+  const isBuiltRoad = (x, y) => builtRoads.has(key(x, y));
+  const visited = new Set();
+  const queue = [];
   const dirs = [
     { dx: 0, dy: -1 }, { dx: 0, dy: 1 },
     { dx: -1, dy: 0 }, { dx: 1, dy: 0 },
   ];
 
-  while (queue.length > 0) {
-    const { x, y } = queue.shift();
+  for (const { dx, dy } of dirs) {
+    const x = bx + dx;
+    const y = by + dy;
+    if (isBuiltRoad(x, y)) {
+      queue.push({ x, y });
+      visited.add(key(x, y));
+    }
+  }
 
-    // 到达中心区域（指挥部附近）
-    if (Math.abs(x - center) <= 1 && Math.abs(y - center) <= 1) return true;
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (Math.abs(current.x - headquarters.x) + Math.abs(current.y - headquarters.y) === 1) return true;
 
     for (const { dx, dy } of dirs) {
-      const nx = x + dx;
-      const ny = y + dy;
-      const nk = key(nx, ny);
-
-      if (visited.has(nk)) continue;
-      if (ny < 0 || ny >= mapSize || nx < 0 || nx >= map[0].length) continue;
-
-      const tile = map[ny][nx];
-      // 只能通过道路或有建筑的格子连通
-      if (tile.building || tile.type === 'plains') {
-        visited.add(nk);
-        queue.push({ x: nx, y: ny });
-      }
+      const x = current.x + dx;
+      const y = current.y + dy;
+      const nodeKey = key(x, y);
+      if (visited.has(nodeKey) || !isBuiltRoad(x, y)) continue;
+      visited.add(nodeKey);
+      queue.push({ x, y });
     }
   }
 

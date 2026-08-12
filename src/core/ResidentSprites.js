@@ -7,6 +7,7 @@ import { gameState } from './GameState.js';
 import { gridToIso } from './MapGenerator.js';
 import { clamp } from './utils.js';
 import { findPath, isWalkable, hasRoad } from './Pathfinding.js';
+import { textureManager } from './TextureManager.js';
 
 const TILE_W = 64;
 const TILE_H = 32;
@@ -199,8 +200,9 @@ const STATE = {
  * 居民精灵类 — 带寻路的目标驱动行为
  */
 export class ResidentSprite {
-  constructor(resident, colorIndex) {
+  constructor(resident, colorIndex, textures = textureManager) {
     this.resident = resident;
+    this.textures = textures;
     this.colors = SPRITE_COLORS[colorIndex % SPRITE_COLORS.length];
     this.isAlien = false;
     this.speciesId = null;
@@ -525,8 +527,14 @@ export class ResidentSprite {
   render(ctx, cameraZoom) {
     const iso = gridToIso(this.gridX, this.gridY, TILE_W, TILE_H);
     const scale = clamp(cameraZoom * 0.8, 0.5, 2);
+    const imageSlots = this.isAlien
+      ? [`tourist.${this.speciesId}`]
+      : [`resident.${this.resident.id}`, 'resident.default'];
+    const image = this.textures.resolveImage(imageSlots);
 
-    if (this.isAlien) {
+    if (image) {
+      this.renderCustomSprite(ctx, iso.x, iso.y, scale, image);
+    } else if (this.isAlien) {
       drawAlienPerson(ctx, iso.x, iso.y, this.colors, this.frame, this.direction, scale, this.speciesId);
     } else {
       drawPixelPerson(ctx, iso.x, iso.y, this.colors, this.frame, this.direction, scale);
@@ -544,6 +552,25 @@ export class ResidentSprite {
     if (this.bubbleIcon && this.bubbleTimer > 0) {
       this.renderBubble(ctx, iso.x, iso.y, scale);
     }
+  }
+
+  renderCustomSprite(ctx, x, y, scale, image) {
+    const frameWidth = image.width / 3;
+    const frameHeight = image.height / 4;
+    const directionIndex = Math.max(0, DIRECTIONS.indexOf(this.direction));
+    const sourceX = Math.min(2, this.frame) * frameWidth;
+    const sourceY = directionIndex * frameHeight;
+    const drawWidth = frameWidth * scale;
+    const drawHeight = frameHeight * scale;
+
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(
+      image,
+      sourceX, sourceY, frameWidth, frameHeight,
+      x - drawWidth / 2, y - drawHeight + 2 * scale, drawWidth, drawHeight,
+    );
+    ctx.restore();
   }
 
   /**
@@ -586,7 +613,8 @@ export class ResidentSprite {
  * 居民精灵管理器 — 管理所有居民和游客精灵
  */
 export class ResidentSpriteManager {
-  constructor() {
+  constructor(textures = textureManager) {
+    this.textures = textures;
     this.sprites = [];
     this.touristSprites = [];  // 外星游客精灵
     this.lastUpdate = performance.now();
@@ -601,7 +629,7 @@ export class ResidentSpriteManager {
     const mapSize = gameState.state.mapSize || 32;
 
     this.sprites = residents.map((r, i) => {
-      const sprite = new ResidentSprite(r, i);
+      const sprite = new ResidentSprite(r, i, this.textures);
       sprite.initPosition(mapSize, map);
       return sprite;
     });
@@ -611,7 +639,7 @@ export class ResidentSpriteManager {
    * 添加外星游客精灵
    */
   addTourist(tourist, speciesId) {
-    const sprite = new ResidentSprite(tourist, 0);
+    const sprite = new ResidentSprite(tourist, 0, this.textures);
     sprite.isAlien = true;
     sprite.speciesId = speciesId;
     sprite.colors = ALIEN_COLORS[speciesId] || ALIEN_COLORS.squid;
@@ -645,7 +673,7 @@ export class ResidentSpriteManager {
     const residents = gameState.state.residents;
     while (this.sprites.length < residents.length) {
       const i = this.sprites.length;
-      const sprite = new ResidentSprite(residents[i], i);
+      const sprite = new ResidentSprite(residents[i], i, this.textures);
       sprite.initPosition(gameState.state.mapSize || 32, map);
       this.sprites.push(sprite);
     }

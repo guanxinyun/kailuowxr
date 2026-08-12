@@ -14,8 +14,9 @@ import { createElement, lucideIcon } from '../core/utils.js';
 import { gameState } from '../core/GameState.js';
 import { GRAVITY_CONFIG } from '../data/gamedata.js';
 import { getBuildingById } from '../data/buildings.js';
+import { aiClient } from './AIClient.js';
 
-const MAX_CONCURRENT = 3;
+const MAX_CONCURRENT = 2;
 
 class AIRequestQueue {
   constructor() {
@@ -218,15 +219,8 @@ class AIRequestQueue {
    * 未来接入真实 API 时替换此方法
    */
   _processRequest(req) {
-    const { type, context, config } = req;
-    const delay = config.minDelay + Math.random() * (config.maxDelay - config.minDelay);
-
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const text = this._generateFromFallback(type, context);
-        resolve(text);
-      }, delay);
-    });
+    const { type, context } = req;
+    return aiClient.generate(type, context, () => this._generateFromFallback(type, context));
   }
 
   /**

@@ -173,6 +173,20 @@ export const BUILDINGS = [
 
   // ===== 科研 =====
   {
+    id: 'workshop',
+    name: '综合工坊',
+    category: 'basic',
+    icon: 'anvil',
+    desc: '把殖民地的原始资源加工成更有价值的材料和商品。',
+    flavor: '好材料不会自己变成好东西，但工坊可以。',
+    cost: { metal: 45, energy: 20 },
+    buildTime: 3,
+    size: [2, 2],
+    gravity: { knowledge: 2, comfort: 1, adventure: 1 },
+    effect: { production: true },
+    unlockTech: null,
+  },
+  {
     id: 'lab',
     name: '研究实验室',
     category: 'science',
