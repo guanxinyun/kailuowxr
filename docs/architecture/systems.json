@@ -1,0 +1,241 @@
+{
+  "schemaVersion": 1,
+  "generatedContextDefaultChars": 120000,
+  "systems": [
+    {
+      "id": "runtime",
+      "name": "启动与游戏循环",
+      "status": "implemented",
+      "summary": "初始化地图和界面，编排每日 tick、建筑放置及各管理器。",
+      "owns": ["运行时循环", "系统调用顺序"],
+      "files": ["src/main.js"],
+      "callers": ["index.html"],
+      "exports": [],
+      "events": ["building:place", "ai:tip", "year:review", "state:population"],
+      "designRefs": ["设计总纲.txt#五、技术架构", "设计文档.txt#第十三部分：主游戏循环"]
+    },
+    {
+      "id": "state",
+      "name": "权威状态与存档",
+      "status": "partial",
+      "summary": "拥有时间、资源、人口、建筑、居民、外交、地图、探索和统计状态。",
+      "owns": ["GameState._state", "存档 JSON"],
+      "files": ["src/core/GameState.js", "src/core/EventBus.js"],
+      "callers": ["src/main.js", "src/core/UIManager.js", "src/core/CanvasRenderer.js", "src/core/TouristManager.js"],
+      "exports": [
+        {"file": "src/core/GameState.js", "names": ["gameState"]},
+        {"file": "src/core/EventBus.js", "names": ["EventBus", "bus"]}
+      ],
+      "events": ["state:change", "state:<path>", "resource:change", "building:placed", "notification:new", "season:change", "year:change", "day:advance", "state:reset", "state:loaded"],
+      "designRefs": ["设计总纲.txt#5.2 状态管理", "设计文档.txt#第十三部分：主游戏循环"]
+    },
+    {
+      "id": "rendering",
+      "name": "Canvas 渲染与精灵",
+      "status": "implemented",
+      "summary": "绘制等距地形、建筑、热力图、居民和游客，并处理地图输入。自定义纹理尚未实现。",
+      "owns": ["Canvas 图层", "显示精灵和相机"],
+      "files": ["src/core/CanvasRenderer.js", "src/core/ResidentSprites.js"],
+      "callers": ["src/main.js", "src/core/TouristManager.js"],
+      "exports": [
+        {"file": "src/core/CanvasRenderer.js", "names": ["CanvasRenderer"]},
+        {"file": "src/core/ResidentSprites.js", "names": ["ALIEN_COLORS", "ResidentSprite", "ResidentSpriteManager"]}
+      ],
+      "events": ["building:placed", "tourist:arrived", "tourist:leaving", "tile:hover", "tile:click", "building:place"],
+      "designRefs": ["设计总纲.txt#七、美术与音效方向"]
+    },
+    {
+      "id": "map-navigation",
+      "name": "地图、坐标与寻路",
+      "status": "partial",
+      "summary": "生成 32×32 地图，转换等距坐标，提供 A* 与道路到总部连通判断。",
+      "owns": ["地图生成规则", "路径与连通算法"],
+      "files": ["src/core/MapGenerator.js", "src/core/Pathfinding.js", "src/data/gamedata.js"],
+      "callers": ["src/main.js", "src/core/CanvasRenderer.js", "src/core/ResidentSprites.js"],
+      "exports": [
+        {"file": "src/core/MapGenerator.js", "names": ["generateMap", "gridToIso", "isoToGrid"]},
+        {"file": "src/core/Pathfinding.js", "names": ["isWalkable", "hasRoad", "findPath", "isConnectedToHQ"]}
+      ],
+      "events": [],
+      "designRefs": ["设计文档.txt#第三部分：地图与地形"]
+    },
+    {
+      "id": "building-economy",
+      "name": "建筑与经营",
+      "status": "partial",
+      "summary": "建筑建造、道路运营约束、1–3级升级、直接资源产出和加工队列已实现；组合系统待实现。",
+      "owns": ["建筑定义", "建筑等级", "建筑运营与产出规则"],
+      "files": ["src/data/buildings.js", "src/data/balance.js", "src/core/BuildingSystem.js", "src/core/ResourceFlowSystem.js", "src/panels/BuildPanel.js", "src/panels/BuildingManagementPanel.js", "src/main.js"],
+      "callers": ["src/core/CanvasRenderer.js", "src/core/TouristManager.js", "src/core/ProductionSystem.js", "src/panels/TechPanel.js"],
+      "exports": [
+        {"file": "src/data/buildings.js", "names": ["BUILDING_CATEGORIES", "BUILDINGS", "getBuildingsByCategory", "getBuildingById"]},
+        {"file": "src/core/BuildingSystem.js", "names": ["getBuildingLevel", "getBuildingEfficiency", "requiresRoadConnection", "getBuildingOperationalState", "getUpgradeCost", "upgradeBuilding", "getManagedBuildings"]},
+        {"file": "src/data/balance.js", "names": ["BALANCE"]},
+        {"file": "src/core/ResourceFlowSystem.js", "names": ["FLOW_RESOURCE_KEYS", "calculateBuildingDailyOutput", "calculateDailyResourceFlow", "getCurrentBuildingDailyOutput", "getCurrentDailyResourceFlow", "formatDailyRate"]},
+        {"file": "src/core/ComboSystem.js", "names": ["evaluateCombos", "isComboActive", "getComboMultiplier", "getComboBonus", "getComboSummary"]},
+        {"file": "src/data/combos.js", "names": ["BUILDING_COMBOS", "getBuildingCombo"]},
+        {"file": "src/panels/BuildPanel.js", "names": ["openBuildPanel"]},
+        {"file": "src/panels/BuildingManagementPanel.js", "names": ["openBuildingManagementPanel"]}
+      ],
+      "events": ["mode:build", "building:place", "building:placed", "building:upgraded", "combo:discovered", "combo:activated", "combo:deactivated", "combos:changed"],
+      "designRefs": ["设计总纲.txt#3.1 最小可玩原型（MVP）", "设计文档.txt#第五部分：物品与生产系统", "设计文档.txt#第八部分：组合系统"]
+    },
+    {
+      "id": "residents",
+      "name": "居民数据与行为",
+      "status": "partial",
+      "summary": "居民技能、心情、日记、和平成长和地图移动已存在；经验、熟练度、体力、劳动力、探索力及住宅阶段由 ResidentGrowthSystem 管理。战斗不在项目范围内。",
+      "owns": ["state.residents", "居民显示行为", "居民成长"],
+      "files": ["src/data/residents.js", "src/core/ResidentGrowthSystem.js", "src/core/ResidentSprites.js", "src/panels/ResidentPanel.js"],
+      "callers": ["src/main.js", "src/core/AIAdvisor.js"],
+      "exports": [
+        {"file": "src/data/residents.js", "names": ["GRAVITY_DIMS", "GRAVITY_LABELS", "INITIAL_RESIDENTS", "RESIDENT_NAME_POOL", "TRAIT_POOL", "getResidentById", "getMoodLabel", "getMoodColor"]},
+        {"file": "src/core/ResidentGrowthSystem.js", "names": ["GROWTH_SKILLS", "GROWTH_ATTRIBUTES", "normalizeResidentGrowth", "normalizeAllResidents", "xpToNextLevel", "getGrowthSummary", "addResidentExperience", "updateResidentGrowth"]},
+        {"file": "src/panels/ResidentPanel.js", "names": ["openResidentPanel"]}
+      ],
+      "events": ["resident:growth", "resident:level-up", "resident:housing-upgraded"],
+      "designRefs": ["设计文档.txt#第六部分：居民系统"]
+    },
+    {
+      "id": "production",
+      "name": "生产与加工",
+      "status": "partial",
+      "summary": "综合工坊将基础资源加工为合金、电路、补给和纪念品；队列按游戏日推进并保存品质。",
+      "owns": ["state.production", "生产配方", "加工队列"],
+      "files": ["src/core/ProductionSystem.js", "src/data/production.js", "src/panels/ProductionPanel.js", "src/core/GameState.js"],
+      "callers": ["src/main.js"],
+      "exports": [
+        {"file": "src/core/ProductionSystem.js", "names": ["getProductionState", "getInventoryEntry", "getInventoryQuantity", "getEstimatedProductionQuality", "canStartProduction", "startProduction", "updateProductionSystem", "addInventory", "getProductionSummary"]},
+        {"file": "src/data/production.js", "names": ["PRODUCT_QUALITY", "PRODUCTION_RECIPES", "getProductionRecipe", "getQuality"]},
+        {"file": "src/panels/ProductionPanel.js", "names": ["openProductionPanel"]}
+      ],
+      "events": ["production:started", "production:completed", "production:inventory", "day:advance"],
+      "designRefs": ["设计总纲.txt#3.1 最小可玩原型（MVP）", "设计文档.txt#第五部分：物品与生产系统"]
+    },
+    {
+      "id": "tourism-diplomacy",
+      "name": "游客与外交",
+      "status": "partial",
+      "summary": "游客按个体六维偏好自主选择景点并逐日访问，离开时按实际满意度结算消费和声望。",
+      "owns": ["运行时游客列表", "state.diplomacy"],
+      "files": ["src/core/TouristManager.js", "src/data/species.js", "src/panels/DiplomacyPanel.js", "src/panels/TourismPanel.js"],
+      "callers": ["src/main.js", "src/core/CanvasRenderer.js"],
+      "exports": [
+        {"file": "src/core/TouristManager.js", "names": ["updateTouristSystem", "scoreAttraction", "buildAutonomousItinerary", "calculateVisitSatisfaction", "processTouristSpending", "getActiveTourists"]},
+        {"file": "src/panels/TourismPanel.js", "names": ["openTourismPanel"]},
+        {"file": "src/data/species.js", "names": ["SPECIES", "getSpeciesById"]},
+        {"file": "src/panels/DiplomacyPanel.js", "names": ["openDiplomacyPanel", "createRadarChart"]}
+      ],
+      "events": ["tourist:arrived", "tourist:leaving", "diplomacy:reputation", "diplomacy:tier"],
+      "designRefs": ["设计总纲.txt#六维引力系统", "设计文档.txt#第七部分：游客系统"]
+    },
+    {
+      "id": "exploration",
+      "name": "探索与战斗",
+      "status": "placeholder",
+      "summary": "单居民和平考察按游戏日推进，校验探索力、生存技能和环境补给；完成后揭示生态区并奖励成长，无战斗。",
+      "owns": ["state.exploredRegions", "state.activeExploration（未使用）"],
+      "files": ["src/core/ExplorationSystem.js", "src/panels/UtilityPanels.js", "src/data/gamedata.js", "src/core/GameState.js", "src/core/MapGenerator.js"],
+      "callers": ["src/main.js"],
+      "exports": [
+        {"file": "src/core/ExplorationSystem.js", "names": ["getExploreRegion", "canStartExpedition", "startExpedition", "updateExplorationSystem", "revealBiomeSector", "normalizeExplorationState"]},
+        {"file": "src/panels/UtilityPanels.js", "names": ["openExplorePanel"]},
+        {"file": "src/data/gamedata.js", "names": ["EXPLORE_REGIONS"]}
+      ],
+      "events": ["explore:start"],
+      "designRefs": ["设计总纲.txt#3.3 第三里程碑：探索与战斗", "设计文档.txt#第十部分：探索系统"]
+    },
+    {
+      "id": "ai-narrative",
+      "name": "AI 叙事与本地降级",
+      "status": "fallback-only",
+      "summary": "统一请求队列目前只生成本地模板文本；没有真实 API、提供商或密钥配置。AI 不拥有玩法状态。",
+      "owns": ["叙事请求队列", "临时文本缓存", "fallback 文本"],
+      "files": ["src/core/AIAdvisor.js", "src/ai/AIRequestQueue.js", "src/ai/AIPrompts.js", "src/ai/AISchemas.js", "src/ai/AIFallbacks.js"],
+      "callers": ["src/main.js", "src/panels/BuildPanel.js", "src/panels/ResidentPanel.js", "src/panels/DiplomacyPanel.js", "src/panels/EventModal.js", "src/panels/AnnualPanel.js"],
+      "exports": [
+        {"file": "src/core/AIAdvisor.js", "names": ["aiAdvisor"]},
+        {"file": "src/ai/AIRequestQueue.js", "names": ["aiQueue"]},
+        {"file": "src/ai/AIPrompts.js", "names": ["AI_REQUEST_TYPES", "REQUEST_CONFIG", "SYSTEM_PROMPTS"]},
+        {"file": "src/ai/AISchemas.js", "names": ["validateResponse"]}
+      ],
+      "events": ["ai:tip", "season:change", "resource:change", "building:placed"],
+      "designRefs": ["设计总纲.txt#六、AI接入的哲学", "设计文档.txt#第十二部分：AI通信统一接口"]
+    },
+    {
+      "id": "saves",
+      "name": "多存档与导入导出",
+      "status": "implemented",
+      "summary": "三个本地存档槽位，支持命名、保存、读取、删除及当前格式 JSON 导入导出。",
+      "owns": ["localStorage 存档槽位"],
+      "files": ["src/core/SaveManager.js", "src/panels/UtilityPanels.js"],
+      "callers": ["src/panels/UtilityPanels.js"],
+      "exports": [{"file":"src/core/SaveManager.js","names":["SaveManager","saveManager"]}],
+      "events": [],
+      "designRefs": []
+    },
+    {
+      "id": "dynamic-ai-content",
+      "name": "运行时 AI 动态内容",
+      "status": "implemented",
+      "summary": "通过玩家自己的 OpenAI 兼容 HTTP/HTTPS 接口或本地降级，在游玩中生成建筑、组合评价和外星种族；规则经本地校验并由玩家确认。",
+      "owns": ["state.aiContent", "当前存档动态建筑/组合/种族"],
+      "files": ["src/ai/AIClient.js", "src/core/AIContentFacts.js", "src/core/AITriggerSystem.js", "src/core/DynamicContentSystem.js", "src/panels/AIContentPanel.js"],
+      "callers": ["src/main.js"],
+      "exports": [
+        {"file":"src/ai/AIClient.js","names":["aiClient"]},
+        {"file":"src/core/AIContentFacts.js","names":["buildProductFacts","buildTouristFacts","buildExplorationFacts","buildDiaryFacts","buildAnnualFacts","getNarrationFallback"]},
+        {"file":"src/core/AITriggerSystem.js","names":["createAITriggerState","recordMilestone","updateShortages","canCreateProposal","markTriggered"]},
+        {"file":"src/core/DynamicContentSystem.js","names":["validateBuildingProposal","validateComboProposal","validateSpeciesProposal","generateProposal","acceptProposal","rejectProposal","restoreDynamicContent","updateDynamicContent","generateComboComment","handleAIContentMilestone"]},
+        {"file":"src/panels/AIContentPanel.js","names":["openAIContentPanel"]}
+      ],
+      "events": ["ai-content:proposed", "ai-content:accepted"],
+      "designRefs": ["设计总纲.txt#六、AI接入的哲学", "设计文档.txt#第十二部分：AI通信统一接口"]
+    },
+    {
+      "id": "annual-review",
+      "name": "确定性年度评估",
+      "status": "implemented",
+      "summary": "根据设施运营、居民成长、生产加工、组合、资源、探索和外交生成确定性分数；AI 只写评语。",
+      "owns": ["state.annualReview", "年度分项得分与荣誉"],
+      "files": ["src/core/AnnualReviewSystem.js", "src/panels/AnnualPanel.js"],
+      "callers": ["src/main.js"],
+      "exports": [
+        {"file": "src/core/AnnualReviewSystem.js", "names": ["calculateAnnualReview"]},
+        {"file": "src/panels/AnnualPanel.js", "names": ["openAnnualPanel"]}
+      ],
+      "events": ["year:review"],
+      "designRefs": ["设计总纲.txt#4.1 温和的失败设计", "设计文档.txt#年终评比"]
+    },
+    {
+      "id": "ui-panels",
+      "name": "DOM 界面与面板",
+      "status": "implemented",
+      "summary": "管理模态框、通知、顶栏、教程和功能面板。面板应调用系统接口而非拥有规则。",
+      "owns": ["DOM 与交互临时状态"],
+      "files": ["src/core/UIManager.js", "src/core/TutorialManager.js", "src/panels/BuildPanel.js", "src/panels/TechPanel.js", "src/panels/ResidentPanel.js", "src/panels/DiplomacyPanel.js", "src/panels/AnnualPanel.js", "src/panels/EventModal.js", "src/panels/UtilityPanels.js"],
+      "callers": ["src/main.js"],
+      "exports": [
+        {"file": "src/core/UIManager.js", "names": ["UIManager", "ui"]},
+        {"file": "src/core/TutorialManager.js", "names": ["TutorialManager"]}
+      ],
+      "events": ["modal:open", "modal:close", "notification:new"],
+      "designRefs": ["设计文档.txt#第二部分：UI布局"]
+    },
+    {
+      "id": "content-data",
+      "name": "静态内容数据",
+      "status": "implemented",
+      "summary": "集中定义地形、资源、建筑、科技、居民、种族、事件和探索区域。数据存在不代表运行逻辑已消费其效果。",
+      "owns": ["静态内容定义"],
+      "files": ["src/data/gamedata.js", "src/data/buildings.js", "src/data/techs.js", "src/data/residents.js", "src/data/species.js"],
+      "callers": ["src/main.js", "src/core/GameState.js", "src/core/CanvasRenderer.js", "src/core/TouristManager.js", "src/panels/BuildPanel.js", "src/panels/TechPanel.js"],
+      "exports": [
+        {"file": "src/data/gamedata.js", "names": ["EVENTS", "TILE_TYPES", "GRAVITY_CONFIG", "RESOURCES", "EXPLORE_REGIONS", "SEASONS"]},
+        {"file": "src/data/techs.js", "names": ["TECHS", "getTechById", "getTechsByTier", "getAvailableTechs"]}
+      ],
+      "events": [],
+      "designRefs": ["设计总纲.txt", "设计文档.txt"]
+    }
+  ]
+}
