@@ -1,16 +1,17 @@
 /**
  * 星尘殖民地 — 年终评比面板
  */
-import { gameState } from '../core/GameState.js';
 import { ui } from '../core/UIManager.js';
 import { aiAdvisor } from '../core/AIAdvisor.js';
 import { AI_REQUEST_TYPES } from '../ai/AIPrompts.js';
 import { createElement, lucideIcon } from '../core/utils.js';
 import { GRAVITY_CONFIG } from '../data/gamedata.js';
 import { createRadarChart } from './DiplomacyPanel.js';
+import { calculateAnnualReview } from '../core/AnnualReviewSystem.js';
+import { buildAnnualFacts } from '../core/AIContentFacts.js';
 
 export function openAnnualPanel(reviewData = null) {
-  const data = reviewData || generateMockReview();
+  const data = reviewData || calculateAnnualReview();
   const container = createElement('div', { className: 'annual-panel-inner' });
 
   // Year header
@@ -68,15 +69,23 @@ export function openAnnualPanel(reviewData = null) {
   }
   container.appendChild(scores);
 
+  const facts = data.facts || {};
+  container.appendChild(createElement('div', { className: 'annual-facts' }, [
+    createElement('span', {}, [`运营设施 ${facts.operationalBuildings ?? 0}`]),
+    createElement('span', {}, [`平均居民 Lv.${facts.averageResidentLevel ?? 0}`]),
+    createElement('span', {}, [`完成加工 ${facts.productsCompleted ?? 0}`]),
+    createElement('span', {}, [`激活组合 ${facts.activeCombos ?? 0}`]),
+    createElement('span', {}, [`外交均值 ${facts.diplomacyAverage ?? 0}`]),
+  ]));
+
   // AI Commentary (信号接收 → 打字机效果)
   const commentaryContainer = createElement('div', { className: 'annual-commentary' });
   container.appendChild(commentaryContainer);
 
-  // 计算平均分并请求 AI 评语
-  const avgScore = Object.values(data.scores).reduce((a, b) => a + b, 0) / 6;
+  // 只把已经确定的年度事实交给 AI，评分本身不可修改
   aiAdvisor.showWithPlaceholder(
     AI_REQUEST_TYPES.ANNUAL_COMMENT,
-    { score: avgScore * 10 },
+    buildAnnualFacts(data),
     commentaryContainer,
     { label: 'AI 年度评审', typeSpeed: 25 }
   );
@@ -96,34 +105,6 @@ export function openAnnualPanel(reviewData = null) {
   const content = ui.createModalContent('年终评比', 'trophy', container);
   content.querySelector('.modal-body').classList.add('annual-panel');
   ui.openModal(content, 'modal-lg');
-}
-
-function generateMockReview() {
-  const year = gameState.state.year;
-  return {
-    year,
-    rank: Math.max(1, 50 - year * 3 - Math.floor(Math.random() * 10)),
-    rankDelta: Math.floor(Math.random() * 6) - 1,
-    grade: ['D', 'C', 'B', 'A', 'S'][Math.min(year - 1, 4)],
-    scores: {
-      food: 3 + Math.floor(Math.random() * 4),
-      knowledge: 2 + Math.floor(Math.random() * 5),
-      comfort: 3 + Math.floor(Math.random() * 3),
-      adventure: 1 + Math.floor(Math.random() * 4),
-      culture: 2 + Math.floor(Math.random() * 4),
-      nature: 2 + Math.floor(Math.random() * 5),
-    },
-    comments: {
-      food: '基本温饱',
-      knowledge: '稳步积累',
-      comfort: '尚可接受',
-      adventure: '有待探索',
-      culture: '初具雏形',
-      nature: '生态萌芽',
-    },
-    commentary: null, // AI placeholder
-    awards: year > 1 ? ['新星殖民地', '生存先锋'] : ['勇敢的第一步'],
-  };
 }
 
 function getGradeColor(grade) {

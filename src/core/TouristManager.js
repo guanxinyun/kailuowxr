@@ -6,6 +6,13 @@
 import { bus } from './EventBus.js';
 import { gameState } from './GameState.js';
 import { SPECIES, getSpeciesById } from '../data/species.js';
+import { getBuildingById } from '../data/buildings.js';
+import { addInventory, getInventoryEntry } from './ProductionSystem.js';
+import { getQuality } from '../data/production.js';
+import { getBuildingEfficiency, getBuildingOperationalState } from './BuildingSystem.js';
+import { getComboMultiplier } from './ComboSystem.js';
+import { aiClient } from '../ai/AIClient.js';
+import { buildTouristFacts, getNarrationFallback } from './AIContentFacts.js';
 
 // 游客名字池（按种族）
 const TOURIST_NAMES = {
@@ -25,34 +32,22 @@ let touristIdCounter = 0;
  */
 export function updateTouristSystem() {
   const day = gameState.state.day;
-  const buildings = gameState.state.buildings.filter(b => b.built);
+  const buildings = gameState.state.buildings.filter(b => getBuildingOperationalState(b).operational);
 
-  // 检查游客是否该离开（停留3-8天后离开）
+  // 每个游戏日自主访问一个偏好景点；离开时按实际访问经历结算
+  updateAutonomousVisits(day);
   const leaving = activeTourists.filter(t => day - t.visitDay >= (t.stayDuration || 5));
-  if (leaving.length > 0) {
-    for (const t of leaving) {
-      activeTourists = activeTourists.filter(at => at !== t);
-    }
-    bus.emit('tourist:leaving', { tourists: leaving });
-    if (leaving.length > 0) {
-      gameState.addNotification({
-        title: '游客离开',
-        text: `${leaving.length}名外星游客结束了愉快的旅程，离开了殖民地。`,
-        type: 'event',
-        icon: 'plane-takeoff',
-        duration: 3000,
-      });
-    }
-  }
+  processTouristDeparture(leaving);
 
   // 计算旅游吸引力（基于文化类建筑）
   let tourismAttraction = 0;
   for (const b of buildings) {
-    if (b.buildingId === 'museum') tourismAttraction += 5;
-    if (b.buildingId === 'concert_hall') tourismAttraction += 8;
-    if (b.buildingId === 'monument') tourismAttraction += 10;
-    if (b.buildingId === 'trade_hub') tourismAttraction += 3;
-    if (b.buildingId === 'plaza') tourismAttraction += 2;
+    const efficiency = getBuildingEfficiency(b) * getComboMultiplier('tourism_attraction', { buildingId: b.buildingId });
+    if (b.buildingId === 'museum') tourismAttraction += 5 * efficiency;
+    if (b.buildingId === 'concert_hall') tourismAttraction += 8 * efficiency;
+    if (b.buildingId === 'monument') tourismAttraction += 10 * efficiency;
+    if (b.buildingId === 'trade_hub') tourismAttraction += 3 * efficiency;
+    if (b.buildingId === 'plaza') tourismAttraction += 2 * efficiency;
   }
 
   // 没有吸引力建筑，不会有游客
@@ -105,7 +100,13 @@ export function updateTouristSystem() {
       visitDay: day,
       stayDuration: 3 + Math.floor(Math.random() * 6), // 停留3-8天
       mood: 70 + Math.random() * 20,
+      itinerary: buildAutonomousItinerary(individualPref, buildings),
+      visitedStops: [],
+      satisfaction: 50,
     };
+    tourist.personality = getNarrationFallback('tourist_personality', buildTouristFacts(tourist));
+    aiClient.generate('tourist_personality', buildTouristFacts(tourist), () => tourist.personality)
+      .then(text => { tourist.personality = typeof text === 'string' ? text : tourist.personality; bus.emit('tourist:narration', { tourist }); });
     newTourists.push(tourist);
   }
 
@@ -122,16 +123,88 @@ export function updateTouristSystem() {
     duration: 5000,
   });
 
-  // 游客消费逻辑（立即结算简化版）
-  processTouristSpending(newTourists, buildings);
+  // 游客到达后不再即时结算；满意度在离开时按路线结算
+}
+
+const TOURIST_ATTRACTIONS = ['museum', 'concert_hall', 'monument', 'trade_hub', 'plaza'];
+
+export function scoreAttraction(preference, building, origin = null) {
+  const data = getBuildingById(building.buildingId);
+  if (!data) return 0;
+  let affinity = 0;
+  for (const [dim, gravity] of Object.entries(data.gravity || {})) {
+    affinity += gravity * (preference[dim] || 0);
+  }
+  const distance = origin ? Math.abs(building.x - origin.x) + Math.abs(building.y - origin.y) : 0;
+  return affinity * getBuildingEfficiency(building) / (1 + distance * 0.12);
+}
+
+export function buildAutonomousItinerary(preference, buildings) {
+  const landing = buildings.find(b => b.buildingId === 'landing_pad');
+  return buildings
+    .filter(b => TOURIST_ATTRACTIONS.includes(b.buildingId) && getBuildingOperationalState(b).operational)
+    .map(b => ({ building: b, score: scoreAttraction(preference, b, landing) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5)
+    .map(entry => entry.building.id);
+}
+
+function updateAutonomousVisits(day) {
+  const buildings = gameState.state.buildings;
+  for (const tourist of activeTourists) {
+    if (tourist.lastVisitDay === day || !tourist.itinerary?.length) continue;
+    const nextId = tourist.itinerary.find(id => !tourist.visitedStops.includes(id));
+    if (!nextId) continue;
+    const target = buildings.find(b => b.id === nextId && getBuildingOperationalState(b).operational);
+    if (!target) continue;
+    tourist.visitedStops.push(nextId);
+    tourist.currentDestination = nextId;
+    tourist.lastVisitDay = day;
+    bus.emit('tourist:destination', { tourist, building: target });
+  }
+}
+
+export function calculateVisitSatisfaction(tourist, buildings) {
+  const visited = (tourist.visitedStops || []).map(id => buildings.find(b => b.id === id)).filter(Boolean);
+  if (!visited.length) return { score: 25, diversity: 0, preferenceMatch: 0 };
+  const diversity = Math.min(100, new Set(visited.map(b => b.buildingId)).size * 25);
+  const scores = visited.map(b => scoreAttraction(tourist.preference, b));
+  const theoretical = Math.max(1, ...buildings.filter(b => TOURIST_ATTRACTIONS.includes(b.buildingId)).map(b => scoreAttraction(tourist.preference, b)));
+  const preferenceMatch = Math.min(100, Math.round((scores.reduce((a, b) => a + b, 0) / scores.length / theoretical) * 100));
+  const souvenirBonus = getInventoryEntry('star_souvenir').quantity > 0 ? 10 : 0;
+  return { score: Math.min(100, Math.round(diversity * 0.35 + preferenceMatch * 0.55 + souvenirBonus)), diversity, preferenceMatch };
+}
+
+function processTouristDeparture(leaving) {
+  if (!leaving.length) return;
+  const buildings = gameState.state.buildings.filter(b => getBuildingOperationalState(b).operational);
+  for (const tourist of leaving) {
+    activeTourists = activeTourists.filter(at => at !== tourist);
+    const satisfaction = calculateVisitSatisfaction(tourist, buildings);
+    tourist.satisfaction = satisfaction.score;
+    processTouristSpending([tourist], buildings, satisfaction);
+    const facts = buildTouristFacts(tourist);
+    tourist.review = getNarrationFallback('tourist_review', facts);
+    aiClient.generate('tourist_review', facts, () => tourist.review)
+      .then(text => bus.emit('tourist:review', { tourist, text: typeof text === 'string' ? text : tourist.review }));
+  }
+  bus.emit('tourist:leaving', { tourists: leaving });
+  const average = Math.round(leaving.reduce((sum, t) => sum + t.satisfaction, 0) / leaving.length);
+  gameState.addNotification({
+    title: '游客离开',
+    text: `${leaving.length}名外星游客结束自主游览，平均满意度 ${average}%。`,
+    type: 'event', icon: 'plane-takeoff', duration: 4000,
+  });
 }
 
 /**
  * 处理游客消费
  */
-function processTouristSpending(tourists, buildings) {
+export function processTouristSpending(tourists, buildings, routeSatisfaction = { score: 50 }) {
   let totalIncome = 0;
   let totalHappinessGain = 0;
+  let souvenirsSold = 0;
+  let souvenirQuality = null;
 
   // 文化类建筑用于消费
   const shops = buildings.filter(b =>
@@ -149,10 +222,25 @@ function processTouristSpending(tourists, buildings) {
 
     for (let v = 0; v < visitCount && remainingBudget > 0; v++) {
       const shop = shops[Math.floor(Math.random() * shops.length)];
-      const spend = Math.min(remainingBudget, Math.floor(5 + Math.random() * 15));
+      const satisfactionMultiplier = 0.6 + routeSatisfaction.score / 100;
+      const spend = Math.min(remainingBudget, Math.floor((5 + Math.random() * 15) * satisfactionMultiplier));
       remainingBudget -= spend;
       tourist.spent += spend;
       totalIncome += spend;
+    }
+
+    const souvenir = getInventoryEntry('star_souvenir');
+    if (souvenir.quantity > 0 && remainingBudget > 0) {
+      souvenirQuality = getQuality(souvenir.qualityScore);
+      const souvenirPrice = Math.min(remainingBudget, 8 + Math.floor(souvenir.qualityScore * 0.22));
+      if (souvenirPrice > 0) {
+        addInventory('star_souvenir', -1);
+        remainingBudget -= souvenirPrice;
+        tourist.spent += souvenirPrice;
+        tourist.mood = Math.min(100, tourist.mood + 3 + Math.floor(souvenir.qualityScore / 25));
+        totalIncome += souvenirPrice;
+        souvenirsSold++;
+      }
     }
 
     // 游客心情受引力匹配影响（简化）
@@ -164,7 +252,9 @@ function processTouristSpending(tourists, buildings) {
     gameState.addResource('credits', totalIncome);
     gameState.addNotification({
       title: '游客消费',
-      text: `外星游客在殖民地消费了 ${totalIncome} 星币。`,
+      text: souvenirsSold > 0
+        ? `外星游客消费了 ${totalIncome} 星币，其中购买了 ${souvenirsSold} 件${souvenirQuality.grade}级星尘纪念品。`
+        : `外星游客在殖民地消费了 ${totalIncome} 星币。`,
       type: 'success',
       icon: 'coins',
       duration: 3000,
@@ -174,7 +264,9 @@ function processTouristSpending(tourists, buildings) {
   // 增加该种族好感度
   if (tourists.length > 0) {
     const speciesId = tourists[0].speciesId;
-    const repGain = Math.ceil(tourists.length * 1.5);
+    const qualityRepBonus = souvenirQuality ? Math.floor(souvenirQuality.min / 30) : 0;
+    const satisfactionRep = Math.floor(routeSatisfaction.score / 25);
+    const repGain = Math.ceil(tourists.length * 1.5) + satisfactionRep + Math.min(3, souvenirsSold + qualityRepBonus);
     const dip = gameState.state.diplomacy[speciesId];
     if (dip) {
       const oldRep = dip.reputation;

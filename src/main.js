@@ -31,7 +31,7 @@ import { evaluateCombos } from './core/ComboSystem.js';
 import { normalizeAllResidents, updateResidentGrowth } from './core/ResidentGrowthSystem.js';
 import { normalizeExplorationState, updateExplorationSystem } from './core/ExplorationSystem.js';
 import { saveManager } from './core/SaveManager.js';
-import { generateComboComment, restoreDynamicContent, updateDynamicContent } from './core/DynamicContentSystem.js';
+import { generateComboComment, handleAIContentMilestone, restoreDynamicContent, updateDynamicContent } from './core/DynamicContentSystem.js';
 import { openAIContentPanel } from './panels/AIContentPanel.js';
 import { BALANCE } from './data/balance.js';
 import { getCurrentDailyResourceFlow } from './core/ResourceFlowSystem.js';
@@ -121,7 +121,12 @@ async function init() {
   bus.on('combo:discovered', ({ combo }) => {
     if (!gameState.state.aiContent.enabled) return;
     generateComboComment(combo.buildingIds).then(comment => ui.setBottomMessage(`[组合评价] ${comment}`));
+    handleAIContentMilestone('combo', combo.id, `围绕首次发现的${combo.name}提出新组合`);
   });
+  bus.on('map:revealed', ({ biome }) => handleAIContentMilestone('biome', biome, `生成适合${biome}生态区的设施`));
+  bus.on('diplomacy:tier', ({ species, tier }) => handleAIContentMilestone('diplomacy', `${species}:${tier.level}`, '根据新外交阶段生成和平交流内容'));
+  bus.on('tech:completed', ({ techId }) => handleAIContentMilestone('technology', techId, '根据刚完成的科技生成相关设施'));
+  bus.on('ai:shortage', ({ resource }) => aiAdvisor.getContextualTip().then(tip => ui.setBottomMessage(`[资源提醒] ${tip}`)));
 
   // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
@@ -337,6 +342,7 @@ function gameTick() {
     cr.progress += researchRate;
     if (cr.progress >= 1) {
       gameState.state.researchedTechs.push(cr.techId);
+      bus.emit('tech:completed', { techId: cr.techId });
       gameState.addNotification({
         title: '研究完成',
         text: `科技研究完成！`,

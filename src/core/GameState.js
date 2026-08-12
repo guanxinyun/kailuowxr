@@ -7,7 +7,7 @@ import { INITIAL_RESIDENTS } from '../data/residents.js';
 import { SEASONS } from '../data/gamedata.js';
 
 function deepClone(obj) {
-  return JSON.parse(JSON.stringify(obj));
+  return structuredClone(obj);
 }
 
 const DEFAULT_STATE = {
@@ -72,6 +72,19 @@ const DEFAULT_STATE = {
   exploredRegions: [],
   activeExploration: null,
 
+  // 生产与加工
+  production: {
+    inventory: {},
+    queue: [],
+    completed: 0,
+  },
+
+  // 建筑组合
+  combos: {
+    active: [],
+    discovered: [],
+  },
+
   // 统计
   stats: {
     totalBuildings: 0,
@@ -86,6 +99,17 @@ const DEFAULT_STATE = {
 
   // 年终评比
   annualReview: null,
+
+  // AI 动态内容（当前存档专属）
+  aiContent: {
+    enabled: true,
+    pending: [],
+    acceptedBuildings: [],
+    acceptedCombos: [],
+    acceptedSpecies: [],
+    lastGeneratedDay: {},
+    triggers: { milestones: [], shortages: {}, lastTriggered: {} },
+  },
 };
 
 class GameState {
@@ -186,12 +210,55 @@ class GameState {
   }
 
   serialize() {
-    return JSON.stringify(this._state);
+    return JSON.stringify(this._state, (key, value) => value === Infinity ? '__INFINITY__' : value);
   }
 
   deserialize(json) {
     try {
-      this._state = JSON.parse(json);
+      const loaded = JSON.parse(json, (key, value) => value === '__INFINITY__' ? Infinity : value);
+      loaded.storage = { ...DEFAULT_STATE.storage, ...(loaded.storage || {}) };
+      if (loaded.storage.research == null) loaded.storage.research = Infinity;
+      if (loaded.storage.credits == null) loaded.storage.credits = Infinity;
+      loaded.exploredRegions = Array.isArray(loaded.exploredRegions) ? loaded.exploredRegions : [];
+      loaded.activeExploration = loaded.activeExploration || null;
+      loaded.production = {
+        inventory: {},
+        queue: [],
+        completed: 0,
+        ...(loaded.production || {}),
+      };
+      loaded.combos = {
+        active: [],
+        discovered: [],
+        ...(loaded.combos || {}),
+      };
+      loaded.aiContent = {
+        enabled: true,
+        pending: [],
+        acceptedBuildings: [],
+        acceptedCombos: [],
+        acceptedSpecies: [],
+        lastGeneratedDay: {},
+        triggers: { milestones: [], shortages: {}, lastTriggered: {} },
+        ...(loaded.aiContent || {}),
+      };
+      loaded.aiContent.triggers = {
+        milestones: [], shortages: {}, lastTriggered: {},
+        ...(loaded.aiContent.triggers || {}),
+      };
+      for (const resident of loaded.residents || []) {
+        resident.xp = Number.isFinite(resident.xp) ? resident.xp : 0;
+        resident.stamina = Number.isFinite(resident.stamina) ? resident.stamina : 10;
+        resident.labor = Number.isFinite(resident.labor) ? resident.labor : 10;
+        resident.exploration = Number.isFinite(resident.exploration) ? resident.exploration : 10;
+        resident.proficiency = {
+          engineering: 0, research: 0, farming: 0, social: 0, survival: 0,
+          ...(resident.proficiency || {}),
+        };
+        resident.housingStage = resident.level >= 7 ? 3 : resident.level >= 4 ? 2 : 1;
+        resident.growthLog = Array.isArray(resident.growthLog) ? resident.growthLog : [];
+      }
+      this._state = loaded;
       bus.emit('state:loaded');
     } catch (e) {
       console.error('Failed to load state:', e);

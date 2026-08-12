@@ -8,6 +8,8 @@ import { gameState } from './GameState.js';
 import { aiQueue } from '../ai/AIRequestQueue.js';
 import { AI_REQUEST_TYPES } from '../ai/AIPrompts.js';
 import { GRAVITY_CONFIG, SEASONS } from '../data/gamedata.js';
+import { aiClient } from '../ai/AIClient.js';
+import { buildDiaryFacts, getNarrationFallback } from './AIContentFacts.js';
 
 class AIAdvisor {
   constructor() {
@@ -60,12 +62,9 @@ class AIAdvisor {
    * @param {object} resident
    * @returns {Promise<string>}
    */
-  async generateDiary(resident) {
-    return aiQueue.request(AI_REQUEST_TYPES.DIARY, {
-      name: resident.name,
-      traits: resident.traits?.join(', ') || '',
-      mood: resident.mood,
-    });
+  async generateDiary(resident, recentFacts = []) {
+    const facts = buildDiaryFacts(resident, recentFacts);
+    return aiClient.generate('factual_diary', facts, () => getNarrationFallback('factual_diary', facts), { cache: false });
   }
 
   /**
