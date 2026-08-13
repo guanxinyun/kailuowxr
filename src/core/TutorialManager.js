@@ -32,7 +32,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'place_building',
     title: '放置建筑',
-    text: '在地图上找到绿色高亮的位置，点击放置建筑。避开水域和山地！',
+    text: '在地图上找到绿色高亮的位置，点击放置建筑。建筑可以连续放置，按 ESC 或右键退出放置模式。',
     highlight: '#canvas-container',
     waitForEvent: 'building:placed',
   },
