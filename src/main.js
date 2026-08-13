@@ -23,7 +23,7 @@ import { openBuildingManagementPanel } from './panels/BuildingManagementPanel.js
 import { openTourismPanel } from './panels/TourismPanel.js';
 import { TutorialManager } from './core/TutorialManager.js';
 import { updateTouristSystem } from './core/TouristManager.js';
-import { updateProductionSystem, updateBuildingAutoProduction, processAutoQueue, getInventoryEntry, addInventory } from './core/ProductionSystem.js';
+import { updateProductionSystem, updateBuildingAutoProduction, processAutoQueue, getInventoryEntry, addInventory, getBuildingAutoProductionStatus, toggleBuildingAutoProduction } from './core/ProductionSystem.js';
 import { RESIDENT_NAME_POOL, TRAIT_POOL } from './data/residents.js';
 import { textureManager } from './core/TextureManager.js';
 import { getBuildingEfficiency, getBuildingOperationalState, getBuildingLevel, getUpgradeCost, upgradeBuilding, demolishBuilding } from './core/BuildingSystem.js';
@@ -783,6 +783,50 @@ function openBuildingInfoPanel(building) {
       ]));
     }
     panel.appendChild(gravSection);
+  }
+
+  // 自动加工信息与开关
+  if (building.built) {
+    const autoStatuses = getBuildingAutoProductionStatus(building);
+    if (autoStatuses.length > 0) {
+      const autoSection = createElement('div', { className: 'building-info-section' });
+      autoSection.appendChild(createElement('h4', {}, ['自动加工']));
+      const RESOURCE_LABELS = {
+        metal: '金属', crystal: '晶体', energy: '能量', food: '食物',
+        alloy: '星尘合金', crystal_circuit: '晶体电路', nutrient_pack: '营养补给包',
+        energy_cell: '能量电池', bio_sample: '生态标本',
+      };
+      for (const status of autoStatuses) {
+        const { recipe, enabled, active, progress } = status;
+        const row = createElement('div', { className: `building-info-auto-row ${enabled ? '' : 'disabled'}` });
+        const inputsText = Object.entries(recipe.inputs)
+          .map(([id, amount]) => `${RESOURCE_LABELS[id] || id} ${amount}`)
+          .join(' + ');
+        row.appendChild(createElement('div', { className: 'building-info-auto-detail' }, [
+          createElement('strong', {}, [recipe.name]),
+          createElement('div', {}, [`${inputsText} → ${recipe.output.name} ×${recipe.output.quantity}`]),
+          enabled && active
+            ? createElement('div', { className: 'building-info-auto-progress' }, [`加工中 ${Math.min(100, Math.round(progress * 100))}%`])
+            : !enabled
+              ? createElement('div', { className: 'building-info-auto-progress muted' }, ['已暂停'])
+              : createElement('div', { className: 'building-info-auto-progress muted' }, ['等待原料']),
+        ]));
+        const toggleBtn = createElement('button', {
+          className: `btn btn-sm ${enabled ? 'btn-active' : 'btn-muted'}`,
+          title: enabled ? '关闭自动加工' : '开启自动加工',
+        }, [
+          lucideIcon(enabled ? 'toggle-right' : 'toggle-left', 16),
+          document.createTextNode(enabled ? ' 开' : ' 关'),
+        ]);
+        toggleBtn.addEventListener('click', () => {
+          toggleBuildingAutoProduction(building, recipe.id);
+          openBuildingInfoPanel(building); // 刷新面板
+        });
+        row.appendChild(toggleBtn);
+        autoSection.appendChild(row);
+      }
+      panel.appendChild(autoSection);
+    }
   }
 
   // 按钮区

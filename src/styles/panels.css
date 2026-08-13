@@ -256,6 +256,72 @@
 .shelf-select { flex: 1; min-width: 100px; padding: 2px 4px; font-size: var(--fs-xs); background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); }
 .shelf-qty { width: 50px; padding: 2px 4px; font-size: var(--fs-xs); background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); }
 
+/* ======== 建筑自动加工 ======== */
+.building-auto-production-section {
+  width: 100%;
+  margin-top: var(--sp-2);
+  padding: var(--sp-2);
+  background: rgba(120,200,160,0.06);
+  border: 1px solid rgba(120,200,160,0.15);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+}
+.auto-production-header {
+  color: var(--text-accent);
+  font-weight: 600;
+  margin-bottom: var(--sp-1);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.auto-production-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--sp-1) 0;
+  gap: var(--sp-2);
+}
+.auto-production-row + .auto-production-row {
+  border-top: 1px solid var(--border-subtle);
+}
+.auto-production-row.disabled { opacity: 0.55; }
+.auto-production-info { flex: 1; min-width: 0; }
+.auto-production-info strong { font-size: var(--fs-sm); }
+.auto-production-detail { color: var(--text-secondary); margin-top: 2px; }
+.auto-production-progress {
+  margin-top: 4px;
+  height: 4px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.auto-progress-bar {
+  display: block;
+  height: 100%;
+  background: var(--text-accent);
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+.auto-progress-text { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+.auto-progress-text.muted { color: var(--text-dim); font-style: italic; }
+.btn-active { color: #7bd88f; border-color: rgba(123,216,143,0.3); }
+.btn-muted { color: var(--text-dim); border-color: var(--border-subtle); }
+
+/* 建筑信息侧面板自动加工 */
+.building-info-auto-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) 0;
+}
+.building-info-auto-row.disabled { opacity: 0.55; }
+.building-info-auto-detail { flex: 1; min-width: 0; font-size: var(--fs-sm); }
+.building-info-auto-detail strong { display: block; }
+.building-info-auto-detail > div { color: var(--text-secondary); font-size: 11px; margin-top: 2px; }
+.building-info-auto-progress { color: var(--text-dim); font-size: 11px; }
+.building-info-auto-progress.muted { font-style: italic; }
+
 /* ======== 贸易站功能 ======== */
 .trade-hub-section {
   width: 100%;

@@ -262,6 +262,9 @@ export function updateBuildingAutoProduction() {
       const ap = building.autoProduction[recipe.id] || { progress: 0, active: false };
       building.autoProduction[recipe.id] = ap;
 
+      // 检查是否启用（默认启用，兼容旧存档）
+      if (ap.enabled === false) continue;
+
       // 如果未激活（没有正在进行的生产），尝试开始新一轮
       if (!ap.active) {
         if (!canAutoConsume(recipe)) continue;
@@ -299,6 +302,41 @@ export function updateBuildingAutoProduction() {
       }
     }
   }
+}
+
+/**
+ * 切换建筑自动加工的启用状态
+ * @param {object} building - 建筑实例
+ * @param {string} recipeId - 配方 ID
+ * @returns {boolean} 切换后的状态
+ */
+export function toggleBuildingAutoProduction(building, recipeId) {
+  if (!building.autoProduction) building.autoProduction = {};
+  const ap = building.autoProduction[recipeId] || { progress: 0, active: false };
+  building.autoProduction[recipeId] = ap;
+  const newEnabled = ap.enabled === false; // 默认 true，取反
+  ap.enabled = newEnabled;
+  bus.emit('building:auto-production-toggled', { building, recipeId, enabled: newEnabled });
+  return newEnabled;
+}
+
+/**
+ * 获取建筑的自动加工状态列表
+ * @param {object} building - 建筑实例
+ * @returns {Array<{recipe, enabled, active, progress}>}
+ */
+export function getBuildingAutoProductionStatus(building) {
+  const recipes = getAutoRecipesForBuilding(building.buildingId);
+  if (!recipes.length) return [];
+  return recipes.map((recipe) => {
+    const ap = building.autoProduction?.[recipe.id];
+    return {
+      recipe,
+      enabled: ap?.enabled !== false,
+      active: ap?.active || false,
+      progress: ap?.progress || 0,
+    };
+  });
 }
 
 export function getProductionSummary() {
