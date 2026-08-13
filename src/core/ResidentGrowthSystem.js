@@ -83,11 +83,11 @@ export function addResidentExperience(resident, amount, skill = null, reason = '
   }
 
   if (levels.length) {
-    resident.growthLog.unshift(`因${reason}成长：${levels.map((level) => `Lv.${level}`).join('、')}`);
+    resident.growthLog.unshift(`因${reason}成长：${levels.map((level) => `${level}级`).join('、')}`);
     resident.growthLog = resident.growthLog.slice(0, 8);
     gameState.addNotification({
       title: '居民成长',
-      text: `${resident.name} ${levels.map((level) => `达到 Lv.${level}`).join('，')}`,
+      text: `${resident.name} ${levels.map((level) => `达到 ${level}级`).join('，')}`,
       type: 'success',
       icon: 'trending-up',
     });

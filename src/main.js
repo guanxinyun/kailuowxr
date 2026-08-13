@@ -681,7 +681,7 @@ function openBuildingInfoPanel(building) {
   const titleBlock = createElement('div', { className: 'building-info-title' });
   titleBlock.appendChild(createElement('h3', {}, [data.name]));
   titleBlock.appendChild(createElement('span', { className: 'building-info-cat' }, [
-    `${CATEGORY_NAMES[data.category] || data.category} · Lv.${level}`,
+    `${CATEGORY_NAMES[data.category] || data.category} · ${level}级`,
   ]));
   header.appendChild(titleBlock);
   panel.appendChild(header);

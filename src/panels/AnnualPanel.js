@@ -72,7 +72,7 @@ export function openAnnualPanel(reviewData = null) {
   const facts = data.facts || {};
   container.appendChild(createElement('div', { className: 'annual-facts' }, [
     createElement('span', {}, [`运营设施 ${facts.operationalBuildings ?? 0}`]),
-    createElement('span', {}, [`平均居民 Lv.${facts.averageResidentLevel ?? 0}`]),
+    createElement('span', {}, [`平均居民 ${facts.averageResidentLevel ?? 0}级`]),
     createElement('span', {}, [`完成加工 ${facts.productsCompleted ?? 0}`]),
     createElement('span', {}, [`激活组合 ${facts.activeCombos ?? 0}`]),
     createElement('span', {}, [`外交均值 ${facts.diplomacyAverage ?? 0}`]),

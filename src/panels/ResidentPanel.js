@@ -50,7 +50,7 @@ function createResidentCard(resident) {
     createElement('div', { className: 'resident-name' }, [resident.name]),
     createElement('div', { className: 'resident-title' }, [resident.title]),
   ]));
-  header.appendChild(createElement('span', { className: 'resident-level' }, [`Lv.${resident.level}`]));
+  header.appendChild(createElement('span', { className: 'resident-level' }, [`${resident.level}级`]));
   header.addEventListener('click', () => card.classList.toggle('expanded'));
   card.appendChild(header);
 
@@ -69,8 +69,8 @@ function createResidentCard(resident) {
   const xpPercent = Math.min(100, (growth.xp / growth.xpToNext) * 100);
   inner.appendChild(createElement('div', { className: 'resident-growth-summary' }, [
     createElement('div', { className: 'resident-growth-header' }, [
-      createElement('strong', {}, [`成长 Lv.${growth.level}`]),
-      createElement('span', {}, [`${growth.xp} / ${growth.xpToNext} XP`]),
+      createElement('strong', {}, [`成长 ${growth.level}级`]),
+      createElement('span', {}, [`${growth.xp} / ${growth.xpToNext} 经验`]),
     ]),
     createElement('div', { className: 'progress-bar' }, [
       createElement('div', { className: 'progress-fill', style: { width: `${xpPercent}%` } }),

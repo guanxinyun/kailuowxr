@@ -41,7 +41,7 @@ export function openBuildingManagementPanel() {
       const card = createElement('div', { className: `managed-building ${entry.operation.operational ? 'operational' : 'offline'}` });
       card.appendChild(createElement('div', { className: 'managed-building-icon' }, [lucideIcon(entry.data.icon, 20)]));
       const info = createElement('div', { className: 'managed-building-info' });
-      info.appendChild(createElement('strong', {}, [`${entry.data.name} · Lv.${entry.level}`]));
+      info.appendChild(createElement('strong', {}, [`${entry.data.name} · ${entry.level}级`]));
       info.appendChild(createElement('div', { className: 'managed-building-location' }, [`坐标 (${entry.building.x}, ${entry.building.y}) · 效率 ${Math.round(entry.efficiency * 100)}%`]));
       info.appendChild(createElement('div', {
         className: `managed-building-status ${entry.operation.operational ? 'online' : 'offline'}`,

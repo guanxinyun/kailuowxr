@@ -135,6 +135,7 @@ export class CanvasRenderer {
     const canvas = this.dynamicCanvas;
 
     canvas.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;          // 只响应左键
       this.isDragging = true;
       this.dragStart = { x: e.clientX - this.camera.x, y: e.clientY - this.camera.y };
       canvas.setPointerCapture(e.pointerId);
@@ -154,6 +155,7 @@ export class CanvasRenderer {
     });
 
     canvas.addEventListener('pointerup', (e) => {
+      if (e.button !== 0) return;           // 只响应左键
       if (this.isDragging) {
         const dx = Math.abs(e.clientX - (this.dragStart.x + this.camera.x));
         const dy = Math.abs(e.clientY - (this.dragStart.y + this.camera.y));

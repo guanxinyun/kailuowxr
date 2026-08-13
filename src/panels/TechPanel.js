@@ -89,7 +89,7 @@ export function openTechPanel() {
     tier.setAttribute('class', 'tech-node-tier');
     tier.setAttribute('x', NODE_W / 2 + 10);
     tier.setAttribute('y', '48');
-    tier.textContent = `T${tech.tier}`;
+    tier.textContent = `${tech.tier}阶`;
     g.appendChild(tier);
 
     // Status indicator
@@ -153,7 +153,7 @@ function showTechDetail(tech, container, event) {
 
   card.innerHTML = `
     <div class="tech-detail-name">${tech.name}</div>
-    <div class="tech-detail-tier">Tier ${tech.tier} ${isResearched ? '· 已研究' : isAvailable ? '· 可研究' : '· 锁定'}</div>
+    <div class="tech-detail-tier">${tech.tier}阶 ${isResearched ? '· 已研究' : isAvailable ? '· 可研究' : '· 锁定'}</div>
     <div class="tech-detail-section">
       <div class="tech-detail-section-title">描述</div>
       <div style="font-size:13px;color:var(--text-secondary);line-height:1.6">${tech.desc}</div>
