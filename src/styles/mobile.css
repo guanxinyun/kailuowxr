@@ -21,23 +21,36 @@
       "topbar"
       "main"
       "toolpanel";
+    max-width: 100vw;
+    overflow: hidden;
   }
 
   /* ---- 顶栏精简 ---- */
   .top-bar {
     padding: 0 var(--sp-2);
     height: var(--topbar-height);
+    overflow: hidden; /* 防止子元素撑宽整个布局 */
   }
   .topbar-left,
   .topbar-center,
   .topbar-right {
     gap: var(--sp-1);
   }
+  /* 关键：允许 flex 子项收缩到内容以下 */
+  .topbar-left {
+    min-width: 0;
+    overflow: hidden;
+  }
+  .topbar-right {
+    flex: 0 1 auto; /* 允许收缩 */
+    min-width: 0;
+  }
   /* 隐藏 logo 文字，只留图标 */
   .logo-text { display: none; }
   .game-logo {
     margin-right: var(--sp-1);
     padding-right: var(--sp-1);
+    flex-shrink: 0; /* logo 不收缩 */
   }
   .logo-icon svg { width: 16px; height: 16px; }
 
@@ -84,8 +97,9 @@
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    justify-content: center;
+    justify-content: flex-start;
     align-items: center;
+    max-width: 100vw;
   }
   .tool-panel::-webkit-scrollbar { display: none; }
   .tool-panel::after { display: none; }
@@ -94,6 +108,7 @@
     flex-direction: row;
     gap: 2px;
     align-items: center;
+    flex-shrink: 0; /* 不收缩，让父容器滚动 */
   }
   .tool-btn {
     width: 40px; height: 40px;
@@ -117,8 +132,10 @@
     background: linear-gradient(180deg, transparent, var(--border-subtle), transparent);
   }
 
-  /* 引力切换按钮保持 2 列但更紧凑 */
+  /* 引力切换按钮改为横排 */
   .gravity-toggles {
+    display: flex;
+    flex-direction: row;
     gap: 2px;
     padding: 0 var(--sp-1);
   }
