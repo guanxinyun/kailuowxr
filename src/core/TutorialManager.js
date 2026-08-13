@@ -54,7 +54,7 @@ const TUTORIAL_STEPS = [
     id: 'building_info',
     title: '查看建筑信息',
     text: '点击地图上已建好的建筑可以查看详细信息，包括运营状态、产出和引力场。在信息面板中还可以升级或拆除建筑。',
-    highlight: '#canvas-container',
+    highlight: null,
     waitForEvent: null,
   },
   {
@@ -118,6 +118,9 @@ export class TutorialManager {
       this.complete();
       return;
     }
+
+    // 切换步骤时清除放置模式，避免残留状态干扰下一步操作
+    gameState.set('placingBuilding', null);
 
     this.currentStep = index;
     const step = this.steps[index];
