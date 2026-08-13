@@ -277,7 +277,8 @@ export class CanvasRenderer {
 
     if (placing) {
       const tileInfo = TILE_TYPES[tile.type];
-      if (tileInfo.buildable && !tile.building) {
+      const techUnlocked = tileInfo.techUnlock ? gameState.state.researchedTechs.includes(tileInfo.techUnlock) : false;
+      if ((tileInfo.buildable || techUnlocked) && !tile.building) {
         bus.emit('building:place', { building: placing, tile });
       }
     } else {
@@ -374,9 +375,20 @@ export class CanvasRenderer {
   _drawKairoTile(ctx, x, y, tile) {
     const customImage = this.textures.getImage(`terrain.${tile.type}`);
     if (customImage) {
+      const hw = TILE_W / 2;
+      const hh = TILE_H / 2;
       ctx.save();
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(customImage, x - customImage.width / 2, y - customImage.height + TILE_H);
+      // 菱形 clip — 让自定义纹理贴合等距地块形状
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + hw, y + hh);
+      ctx.lineTo(x, y + TILE_H);
+      ctx.lineTo(x - hw, y + hh);
+      ctx.closePath();
+      ctx.clip();
+      // 将图片缩放到 TILE_W × TILE_H 并居中对齐菱形
+      ctx.drawImage(customImage, x - hw, y, TILE_W, TILE_H);
       ctx.restore();
       return;
     }
@@ -901,7 +913,8 @@ export class CanvasRenderer {
       const placing = gameState.state.placingBuilding;
       if (placing) {
         const tileInfo = TILE_TYPES[tile.type];
-        const canPlace = tileInfo.buildable && !tile.building;
+        const techUnlocked = tileInfo.techUnlock ? gameState.state.researchedTechs.includes(tileInfo.techUnlock) : false;
+        const canPlace = (tileInfo.buildable || techUnlocked) && !tile.building;
         ctx.fillStyle = canPlace ? 'rgba(46,204,113,0.25)' : 'rgba(231,76,60,0.25)';
         ctx.strokeStyle = canPlace ? 'rgba(46,204,113,0.8)' : 'rgba(231,76,60,0.8)';
       } else {

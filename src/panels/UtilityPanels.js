@@ -9,6 +9,7 @@ import { bus } from '../core/EventBus.js';
 import { TutorialManager } from '../core/TutorialManager.js';
 import { textureManager } from '../core/TextureManager.js';
 import { TEXTURE_SLOTS, getTextureSlotsByCategory } from '../data/textureSlots.js';
+import { openCropModal } from './TextureCropModal.js';
 import { canStartExpedition, startExpedition, generateRandomExpedition } from '../core/ExplorationSystem.js';
 import { getInventoryQuantity } from '../core/ProductionSystem.js';
 import { saveManager } from '../core/SaveManager.js';
@@ -386,8 +387,43 @@ function createTextureSettings() {
     uploadButton.disabled = true;
     status.textContent = '正在读取素材…';
     try {
-      await textureManager.install(slotSelect.value, file);
-      gameState.addNotification({ title: '纹理已更新', text: '自定义素材已应用到游戏画面', type: 'success', icon: 'image' });
+      const slot = TEXTURE_SLOTS.find((entry) => entry.id === slotSelect.value);
+      const targetW = slot?.targetWidth;
+      const targetH = slot?.targetHeight;
+
+      // 先解码图片检查尺寸
+      const img = typeof createImageBitmap === 'function'
+        ? await createImageBitmap(file)
+        : await new Promise((res, rej) => {
+            const url = URL.createObjectURL(file);
+            const image = new Image();
+            image.onload = () => { URL.revokeObjectURL(url); res(image); };
+            image.onerror = () => { URL.revokeObjectURL(url); rej(new Error('图片无法解码')); };
+            image.src = url;
+          });
+
+      const imgW = img.width || img.naturalWidth;
+      const imgH = img.height || img.naturalHeight;
+
+      // 如果图片尺寸已完全匹配目标，或没有目标尺寸，直接安装
+      if (!targetW || !targetH || (imgW === targetW && imgH === targetH)) {
+        await textureManager.install(slotSelect.value, file);
+        gameState.addNotification({ title: '纹理已更新', text: '自定义素材已应用到游戏画面', type: 'success', icon: 'image' });
+      } else {
+        // 打开裁剪弹窗
+        const result = await openCropModal(img, targetW, targetH, { kind: slot?.kind });
+        if (result === 'cancel') {
+          // 用户取消
+        } else if (result === null) {
+          // 使用原图
+          await textureManager.install(slotSelect.value, file);
+          gameState.addNotification({ title: '纹理已更新', text: '使用原图已应用到游戏画面', type: 'success', icon: 'image' });
+        } else {
+          // 裁剪后的 Blob
+          await textureManager.install(slotSelect.value, result);
+          gameState.addNotification({ title: '纹理已更新', text: `已裁剪为 ${targetW}×${targetH} 并应用`, type: 'success', icon: 'image' });
+        }
+      }
     } catch (error) {
       gameState.addNotification({ title: '纹理上传失败', text: error.message, type: 'warning', icon: 'alert-triangle' });
     } finally {

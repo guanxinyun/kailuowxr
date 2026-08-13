@@ -74,6 +74,34 @@
   border-radius: var(--radius-sm);
 }
 
+/* 纹理裁剪弹窗 */
+.crop-modal {
+  display: flex; flex-direction: column; align-items: center; gap: var(--sp-3);
+}
+.crop-info {
+  color: var(--text-secondary); font-size: var(--fs-xs); text-align: center;
+}
+.crop-canvas {
+  border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);
+  max-width: 100%; background: repeating-conic-gradient(#222 0% 25%, #333 0% 50%) 0 0 / 16px 16px;
+}
+.crop-controls {
+  display: flex; gap: var(--sp-2); flex-wrap: wrap; justify-content: center;
+}
+.crop-canvas-row {
+  display: flex; gap: var(--sp-3); align-items: flex-start; flex-wrap: wrap; justify-content: center;
+}
+.crop-preview-box {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+.crop-preview-label {
+  color: var(--text-secondary); font-size: 11px;
+}
+.crop-preview-canvas {
+  border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);
+  image-rendering: pixelated;
+}
+
 .ai-content-status { display:flex; align-items:center; justify-content:space-between; gap:var(--sp-3); padding:var(--sp-3); background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:var(--radius-sm); }
 .ai-content-status > div { display:flex; flex-direction:column; gap:3px; }
 .ai-content-status span, .ai-content-accepted { color:var(--text-secondary); font-size:11px; }
@@ -174,6 +202,43 @@
 .managed-building-status.online { color: #7bd88f; }
 .managed-building-status.offline { color: #e48282; }
 .managed-building-max { color: var(--text-dim); font-size: var(--fs-xs); }
+.managed-building-output { color: var(--text-secondary); font-size: 11px; margin-top: 2px; }
+
+/* ======== 货架系统 ======== */
+.building-shelf-section {
+  width: 100%;
+  margin-top: var(--sp-2);
+  padding: var(--sp-2);
+  background: rgba(120,170,255,0.06);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+}
+.shelf-header { color: var(--text-accent); font-weight: 600; margin-bottom: var(--sp-1); display: flex; align-items: center; gap: 4px; }
+.shelf-item { display: flex; justify-content: space-between; align-items: center; padding: 2px 0; }
+.shelf-add-row { display: flex; gap: var(--sp-1); align-items: center; margin-top: var(--sp-1); flex-wrap: wrap; }
+.shelf-select { flex: 1; min-width: 100px; padding: 2px 4px; font-size: var(--fs-xs); background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); }
+.shelf-qty { width: 50px; padding: 2px 4px; font-size: var(--fs-xs); background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); }
+
+/* ======== 贸易站功能 ======== */
+.trade-hub-section {
+  width: 100%;
+  margin-top: var(--sp-2);
+  padding: var(--sp-2);
+  background: rgba(240,192,64,0.06);
+  border: 1px solid rgba(240,192,64,0.15);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+}
+.trade-hub-section h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); color: var(--text-accent); display: flex; align-items: center; gap: 4px; }
+.trade-subtitle { color: var(--text-secondary); font-weight: 600; margin: var(--sp-2) 0 var(--sp-1); }
+.trade-buy-row { display: flex; align-items: center; gap: var(--sp-1); padding: 2px 0; flex-wrap: wrap; }
+.trade-buy-row span { flex: 1; min-width: 120px; }
+.trade-qty { width: 50px; padding: 2px 4px; font-size: var(--fs-xs); background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); }
+.trade-promo-section { margin-top: var(--sp-2); }
+.promo-row { display: flex; align-items: center; gap: var(--sp-1); margin-bottom: var(--sp-1); }
+.promo-select { padding: 2px 4px; font-size: var(--fs-xs); background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); }
+.campaign-active { color: var(--text-accent); padding: var(--sp-1); background: rgba(120,170,255,0.08); border-radius: var(--radius-sm); }
+.btn-sm { padding: 2px 8px; font-size: var(--fs-xs); }
 
 /* ======== 建筑信息侧面板 ======== */
 .building-info-panel {
@@ -329,6 +394,24 @@
 .production-recipe-details p { margin: 3px 0; color: var(--text-secondary); font-size: var(--fs-xs); }
 .production-cost, .production-output { color: var(--text-dim); font-size: 11px; }
 .production-output { color: var(--text-accent); margin-top: 3px; }
+
+/* 自动生产控制 */
+.production-auto-controls {
+  display: flex; align-items: center; gap: 4px;
+  margin-top: 6px; padding-top: 6px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: var(--fs-xs);
+}
+.auto-count-input {
+  width: 48px; padding: 2px 4px;
+  background: var(--bg-card); color: var(--text-primary);
+  border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);
+  font-size: var(--fs-xs); text-align: center;
+}
+.auto-status { color: var(--text-secondary); }
+.auto-status.active { color: var(--text-accent); }
+.btn-danger { background: rgba(220,60,60,0.15); color: #e55; border: 1px solid rgba(220,60,60,0.3); }
+.btn-danger:hover { background: rgba(220,60,60,0.25); }
 
 /* ======== 外交面板 ======== */
 .diplomacy-panel .modal-body {
