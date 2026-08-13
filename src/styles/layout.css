@@ -6,6 +6,7 @@
   position: relative;
   width: 100vw;
   height: 100vh;
+  height: 100dvh; /* 移动端浏览器地址栏不遮挡底部工具栏 */
   display: grid;
   grid-template-rows: var(--topbar-height) 1fr var(--bottombar-height);
   grid-template-columns: var(--toolpanel-width) 1fr;
