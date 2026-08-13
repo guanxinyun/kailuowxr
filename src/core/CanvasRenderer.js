@@ -260,8 +260,19 @@ export class CanvasRenderer {
   }
 
   _handleClick(e) {
-    if (!this.hoveredTile) return;
-    const tile = this.hoveredTile;
+    // 从点击坐标直接计算格子（手机端 pointermove 可能未触发，hoveredTile 为空）
+    const rect = this.dynamicCanvas.getBoundingClientRect();
+    const sx = (e.clientX - rect.left - this.camera.x) / this.camera.zoom;
+    const sy = (e.clientY - rect.top - this.camera.y) / this.camera.zoom;
+    const grid = isoToGrid(sx, sy, TILE_W, TILE_H);
+    const map = gameState.state.map;
+    if (!map || grid.x < 0 || grid.y < 0 || grid.x >= map[0].length || grid.y >= map.length) return;
+    const tile = map[grid.y][grid.x];
+
+    // 同步 hoveredTile 以保持一致
+    this.hoveredTile = tile;
+    this._dynamicDirty = true;
+
     const placing = gameState.state.placingBuilding;
 
     if (placing) {
