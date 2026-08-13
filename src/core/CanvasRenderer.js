@@ -181,6 +181,14 @@ export class CanvasRenderer {
       this._dynamicDirty = true;
       this._heatmapDirty = true;
     }, { passive: false });
+
+    // 右键退出放置模式
+    canvas.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      if (gameState.state.placingBuilding) {
+        gameState.set('placingBuilding', null);
+      }
+    });
   }
 
   _updateHover(e) {

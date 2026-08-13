@@ -114,7 +114,10 @@ async function init() {
       updateGravityField(tile.x, tile.y, dim, val);
     }
 
-    gameState.set('placingBuilding', null);
+    // 连续铺设：放置后保持放置模式，资源不足时自动退出
+    if (!gameState.canAfford(data.cost)) {
+      gameState.set('placingBuilding', null);
+    }
     gameState.addNotification({ title: '开始建造', text: `${data.name} 建造中...`, type: 'success', icon: 'hammer' });
     renderer.markDirty();
   });

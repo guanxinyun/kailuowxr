@@ -39,9 +39,9 @@ const TUTORIAL_STEPS = [
   {
     id: 'roads',
     title: '建造道路',
-    text: '建筑需要通过道路连接才能高效运作。试试再建造一条"连接通道"吧！你可以按 B 键快速打开建造面板。',
+    text: '建筑需要通过道路连接降落点才能正常运作。打开建造面板，选择"连接通道"并铺设到建筑旁边吧！按 B 键可快速打开建造面板。',
     highlight: null,
-    waitForEvent: null,
+    waitForEvent: 'building:placed',
   },
   {
     id: 'tourists',
