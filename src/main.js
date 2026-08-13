@@ -7,7 +7,7 @@ import { gameState } from './core/GameState.js';
 import { CanvasRenderer } from './core/CanvasRenderer.js';
 import { ui } from './core/UIManager.js';
 import { aiAdvisor } from './core/AIAdvisor.js';
-import { $, $$, lucideIcon, formatNumber } from './core/utils.js';
+import { $, $$, createElement, lucideIcon, formatNumber } from './core/utils.js';
 import { generateMap } from './core/MapGenerator.js';
 import { RESOURCES, GRAVITY_CONFIG, SEASONS } from './data/gamedata.js';
 import { BUILDINGS, getBuildingById } from './data/buildings.js';
@@ -26,7 +26,7 @@ import { updateTouristSystem } from './core/TouristManager.js';
 import { updateProductionSystem } from './core/ProductionSystem.js';
 import { RESIDENT_NAME_POOL, TRAIT_POOL } from './data/residents.js';
 import { textureManager } from './core/TextureManager.js';
-import { getBuildingEfficiency, getBuildingOperationalState } from './core/BuildingSystem.js';
+import { getBuildingEfficiency, getBuildingOperationalState, getBuildingLevel, getUpgradeCost, upgradeBuilding, demolishBuilding } from './core/BuildingSystem.js';
 import { evaluateCombos } from './core/ComboSystem.js';
 import { normalizeAllResidents, updateResidentGrowth } from './core/ResidentGrowthSystem.js';
 import { normalizeExplorationState, updateExplorationSystem, unlockRegion } from './core/ExplorationSystem.js';
@@ -34,7 +34,7 @@ import { saveManager } from './core/SaveManager.js';
 import { generateComboComment, handleAIContentMilestone, restoreDynamicContent, updateDynamicContent } from './core/DynamicContentSystem.js';
 import { openAIContentPanel } from './panels/AIContentPanel.js';
 import { BALANCE } from './data/balance.js';
-import { getCurrentDailyResourceFlow } from './core/ResourceFlowSystem.js';
+import { getCurrentDailyResourceFlow, getCurrentBuildingDailyOutput, formatDailyRate } from './core/ResourceFlowSystem.js';
 
 // ===== Initialize =====
 async function init() {
@@ -119,6 +119,16 @@ async function init() {
     renderer.markDirty();
   });
 
+  // Building demolished — reverse gravity field
+  bus.on('building:demolished', ({ building: removed, data }) => {
+    if (data?.gravity) {
+      for (const [dim, val] of Object.entries(data.gravity)) {
+        updateGravityField(removed.x, removed.y, dim, -val);
+      }
+    }
+    renderer.markDirty();
+  });
+
   // AI tip display
   bus.on('ai:tip', (tip) => {
     ui.setBottomMessage(`[AI] ${tip}`);
@@ -132,6 +142,19 @@ async function init() {
   bus.on('diplomacy:tier', ({ species, tier }) => handleAIContentMilestone('diplomacy', `${species}:${tier.level}`, '根据新外交阶段生成和平交流内容'));
   bus.on('tech:completed', ({ techId }) => handleAIContentMilestone('technology', techId, '根据刚完成的科技生成相关设施'));
   bus.on('ai:shortage', ({ resource }) => aiAdvisor.getContextualTip().then(tip => ui.setBottomMessage(`[资源提醒] ${tip}`)));
+
+  // Tile click — open building info side panel
+  bus.on('tile:click', (tile) => {
+    if (!tile.building) {
+      ui.closeSidePanel();
+      return;
+    }
+    const building = gameState.state.buildings.find(
+      (b) => b.x === tile.x && b.y === tile.y,
+    );
+    if (!building) return;
+    openBuildingInfoPanel(building);
+  });
 
   // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
@@ -622,6 +645,158 @@ function setupBottomBar() {
   bus.on('year:review', () => {
     openAnnualPanel();
   });
+}
+
+// ===== Building Info Side Panel =====
+const CATEGORY_NAMES = {
+  basic: '基础', food: '食物', science: '科研',
+  culture: '文化', military: '防御', special: '特殊',
+};
+
+function openBuildingInfoPanel(building) {
+  const data = getBuildingById(building.buildingId);
+  if (!data) return;
+
+  const level = getBuildingLevel(building);
+  const efficiency = getBuildingEfficiency(building);
+  const opState = getBuildingOperationalState(building);
+  const upgradeCost = getUpgradeCost(building);
+
+  const panel = createElement('div', { className: 'building-info-panel' });
+
+  // 关闭按钮
+  const closeBtn = createElement('button', {
+    className: 'building-info-close',
+    title: '关闭',
+  }, [lucideIcon('x', 16)]);
+  closeBtn.addEventListener('click', () => ui.closeSidePanel());
+  panel.appendChild(closeBtn);
+
+  // 标题区
+  const header = createElement('div', { className: 'building-info-header' });
+  header.appendChild(createElement('div', { className: 'building-info-icon' }, [lucideIcon(data.icon, 28)]));
+  const titleBlock = createElement('div', { className: 'building-info-title' });
+  titleBlock.appendChild(createElement('h3', {}, [data.name]));
+  titleBlock.appendChild(createElement('span', { className: 'building-info-cat' }, [
+    `${CATEGORY_NAMES[data.category] || data.category} · Lv.${level}`,
+  ]));
+  header.appendChild(titleBlock);
+  panel.appendChild(header);
+
+  // 状态
+  const statusClass = opState.operational ? 'online' : 'offline';
+  const statusText = !building.built ? `建造中 ${Math.floor(building.progress * 100)}%`
+    : opState.operational ? '运行中' : opState.reason;
+  const statusEl = createElement('div', { className: `building-info-status ${statusClass}` }, [
+    lucideIcon(opState.operational ? 'check' : 'alert-triangle', 14),
+    document.createTextNode(` ${statusText}`),
+  ]);
+  panel.appendChild(statusEl);
+
+  // 坐标与效率
+  panel.appendChild(createElement('div', { className: 'building-info-meta' }, [
+    `坐标 (${building.x}, ${building.y}) · 效率 ${Math.round(efficiency * 100)}%`,
+  ]));
+
+  // 描述
+  if (data.desc) {
+    panel.appendChild(createElement('p', { className: 'building-info-desc' }, [data.desc]));
+  }
+
+  // 产出
+  if (building.built) {
+    const dailyOutput = getCurrentBuildingDailyOutput(building);
+    const outputEntries = Object.entries(dailyOutput).filter(([, v]) => v !== 0);
+    if (outputEntries.length) {
+      const outputSection = createElement('div', { className: 'building-info-section' });
+      outputSection.appendChild(createElement('h4', {}, ['每日产出']));
+      for (const [resource, amount] of outputEntries) {
+        const res = RESOURCES[resource];
+        const sign = amount >= 0 ? '+' : '';
+        outputSection.appendChild(createElement('div', { className: 'building-info-output-row' }, [
+          lucideIcon(res?.icon || 'circle-dot', 14),
+          document.createTextNode(` ${res?.name || resource} ${sign}${formatDailyRate(amount)}/天`),
+        ]));
+      }
+      panel.appendChild(outputSection);
+    }
+  }
+
+  // 引力效果
+  const gravityEntries = Object.entries(data.gravity || {}).filter(([, v]) => v !== 0);
+  if (gravityEntries.length) {
+    const gravSection = createElement('div', { className: 'building-info-section' });
+    gravSection.appendChild(createElement('h4', {}, ['引力场']));
+    for (const [dim, val] of gravityEntries) {
+      const sign = val > 0 ? '+' : '';
+      gravSection.appendChild(createElement('div', { className: 'building-info-output-row' }, [
+        `${dim} ${sign}${val}`,
+      ]));
+    }
+    panel.appendChild(gravSection);
+  }
+
+  // 按钮区
+  const actions = createElement('div', { className: 'building-info-actions' });
+
+  // 升级按钮
+  if (upgradeCost && building.built) {
+    const costText = Object.entries(upgradeCost)
+      .map(([resource, amount]) => `${RESOURCES[resource]?.name || resource} ${formatNumber(amount)}`)
+      .join(' · ');
+    const canAfford = gameState.canAfford(upgradeCost);
+    const upgradeBtn = createElement('button', {
+      className: 'btn btn-primary',
+      disabled: !opState.operational || !canAfford,
+      title: `升级消耗：${costText}`,
+    }, [lucideIcon('arrow-up-circle', 14), document.createTextNode(` 升级 (${costText})`)]);
+    upgradeBtn.addEventListener('click', () => {
+      const result = upgradeBuilding(building.id);
+      if (result.ok) {
+        openBuildingInfoPanel(building); // 刷新面板
+        renderer.markDirty();
+      } else {
+        gameState.addNotification({ title: '无法升级', text: result.reason, type: 'warning', icon: 'alert-triangle' });
+      }
+    });
+    actions.appendChild(upgradeBtn);
+  } else if (level >= 3 && building.buildingId !== 'landing_pad' && building.buildingId !== 'road') {
+    actions.appendChild(createElement('span', { className: 'building-info-max' }, ['已满级']));
+  }
+
+  // 拆除按钮（降落点不可拆除）
+  if (building.buildingId !== 'landing_pad') {
+    const refundText = data.cost
+      ? Object.entries(data.cost)
+          .map(([resource, amount]) => `${RESOURCES[resource]?.name || resource} ${Math.floor(amount * 0.5)}`)
+          .join(' · ')
+      : '';
+    const demolishBtn = createElement('button', {
+      className: 'btn btn-danger',
+      title: refundText ? `回收：${refundText}` : '拆除建筑',
+    }, [lucideIcon('hammer', 14), document.createTextNode(' 拆除')]);
+    demolishBtn.addEventListener('click', () => {
+      ui.showConfirm({
+        title: '确认拆除',
+        text: `确定要拆除 ${data.name} 吗？${refundText ? `\n将回收：${refundText}` : ''}`,
+        confirmText: '拆除',
+        onConfirm: () => {
+          const result = demolishBuilding(building.id);
+          if (result.ok) {
+            ui.closeSidePanel();
+            renderer.markDirty();
+          } else {
+            gameState.addNotification({ title: '无法拆除', text: result.reason, type: 'warning', icon: 'alert-triangle' });
+          }
+        },
+      });
+    });
+    actions.appendChild(demolishBtn);
+  }
+
+  panel.appendChild(actions);
+
+  ui.openSidePanel(panel);
 }
 
 function updateGravityField(cx, cy, dim, value) {

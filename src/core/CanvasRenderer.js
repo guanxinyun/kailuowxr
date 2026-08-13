@@ -10,6 +10,7 @@ import { gridToIso, isoToGrid } from './MapGenerator.js';
 import { TILE_TYPES, GRAVITY_CONFIG } from '../data/gamedata.js';
 import { getBuildingById } from '../data/buildings.js';
 import { clamp, lucideIcon } from './utils.js';
+import { getBuildingOperationalState, requiresRoadConnection } from './BuildingSystem.js';
 import { ResidentSpriteManager } from './ResidentSprites.js';
 import { textureManager } from './TextureManager.js';
 
@@ -690,6 +691,43 @@ export class CanvasRenderer {
     ctx.shadowBlur = 3;
     ctx.fillText(data.name, x, y - bh - 5);
     ctx.shadowBlur = 0;
+
+    // 未连接降落点的警告三角
+    if (requiresRoadConnection(building)) {
+      const opState = getBuildingOperationalState(building);
+      if (!opState.operational && opState.reason === '未通过道路连接降落点') {
+        this._drawWarningTriangle(ctx, x + hw * 0.35, y - bh - 10);
+      }
+    }
+  }
+
+  /**
+   * 警告三角标志 — 未连接降落点时显示
+   */
+  _drawWarningTriangle(ctx, cx, cy) {
+    const size = 7;
+    ctx.save();
+
+    // 三角形背景
+    ctx.fillStyle = '#E74C3C';
+    ctx.strokeStyle = '#C0392B';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - size);
+    ctx.lineTo(cx + size, cy + size * 0.6);
+    ctx.lineTo(cx - size, cy + size * 0.6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // 感叹号
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 8px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('!', cx, cy);
+
+    ctx.restore();
   }
 
   /**

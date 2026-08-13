@@ -54,6 +54,33 @@ export function upgradeBuilding(buildingId) {
   return { ok: true, building };
 }
 
+export function demolishBuilding(buildingId) {
+  const building = gameState.state.buildings.find((b) => b.id === buildingId);
+  if (!building) return { ok: false, reason: '找不到建筑' };
+  if (building.buildingId === 'landing_pad') return { ok: false, reason: '降落点无法拆除' };
+
+  const data = getBuildingById(building.buildingId);
+
+  // 退还 50% 建造资源
+  if (data?.cost) {
+    for (const [resource, amount] of Object.entries(data.cost)) {
+      gameState.addResource(resource, Math.floor(amount * 0.5));
+    }
+  }
+
+  const removed = gameState.removeBuilding(buildingId);
+  if (!removed) return { ok: false, reason: '移除失败' };
+
+  bus.emit('building:demolished', { building: removed, data });
+  gameState.addNotification({
+    title: '设施已拆除',
+    text: `${data?.name || '建筑'} 已拆除，回收了部分资源`,
+    type: 'info',
+    icon: 'hammer',
+  });
+  return { ok: true, building: removed };
+}
+
 export function getManagedBuildings() {
   return gameState.state.buildings
     .filter((building) => building.buildingId !== 'road')

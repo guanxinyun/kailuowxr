@@ -173,6 +173,20 @@ class GameState {
     bus.emit('building:placed', building);
   }
 
+  removeBuilding(buildingId) {
+    const idx = this._state.buildings.findIndex((b) => b.id === buildingId);
+    if (idx === -1) return null;
+    const building = this._state.buildings[idx];
+    this._state.buildings.splice(idx, 1);
+    // 清除地块上的建筑引用
+    const map = this._state.map;
+    if (map && map[building.y] && map[building.y][building.x]) {
+      map[building.y][building.x].building = null;
+    }
+    bus.emit('building:removed', building);
+    return building;
+  }
+
   addNotification(notification) {
     const n = { id: Date.now() + Math.random(), time: this._state.day, ...notification };
     this._state.notifications.push(n);

@@ -69,7 +69,7 @@
       "callers": ["src/core/CanvasRenderer.js", "src/core/TouristManager.js", "src/core/ProductionSystem.js", "src/panels/TechPanel.js"],
       "exports": [
         {"file": "src/data/buildings.js", "names": ["BUILDING_CATEGORIES", "BUILDINGS", "getBuildingsByCategory", "getBuildingById"]},
-        {"file": "src/core/BuildingSystem.js", "names": ["getBuildingLevel", "getBuildingEfficiency", "requiresRoadConnection", "getBuildingOperationalState", "getUpgradeCost", "upgradeBuilding", "getManagedBuildings"]},
+        {"file": "src/core/BuildingSystem.js", "names": ["getBuildingLevel", "getBuildingEfficiency", "requiresRoadConnection", "getBuildingOperationalState", "getUpgradeCost", "upgradeBuilding", "demolishBuilding", "getManagedBuildings"]},
         {"file": "src/data/balance.js", "names": ["BALANCE"]},
         {"file": "src/core/ResourceFlowSystem.js", "names": ["FLOW_RESOURCE_KEYS", "calculateBuildingDailyOutput", "calculateDailyResourceFlow", "getCurrentBuildingDailyOutput", "getCurrentDailyResourceFlow", "formatDailyRate"]},
         {"file": "src/core/ComboSystem.js", "names": ["evaluateCombos", "isComboActive", "getComboMultiplier", "getComboBonus", "getComboSummary"]},
@@ -77,7 +77,7 @@
         {"file": "src/panels/BuildPanel.js", "names": ["openBuildPanel"]},
         {"file": "src/panels/BuildingManagementPanel.js", "names": ["openBuildingManagementPanel"]}
       ],
-      "events": ["mode:build", "building:place", "building:placed", "building:upgraded", "combo:discovered", "combo:activated", "combo:deactivated", "combos:changed"],
+      "events": ["mode:build", "building:place", "building:placed", "building:removed", "building:upgraded", "building:demolished", "combo:discovered", "combo:activated", "combo:deactivated", "combos:changed"],
       "designRefs": ["设计总纲.txt#3.1 最小可玩原型（MVP）", "设计文档.txt#第五部分：物品与生产系统", "设计文档.txt#第八部分：组合系统"]
     },
     {
