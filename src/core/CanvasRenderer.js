@@ -816,9 +816,18 @@ export class CanvasRenderer {
   _drawRoad(ctx, x, y, building) {
     const customImage = this.textures.getImage('building.road');
     if (customImage) {
+      const hw = TILE_W / 2;
+      const hh = TILE_H / 2;
       ctx.save();
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(customImage, x - customImage.width / 2, y + TILE_H / 2 - customImage.height);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + hw, y + hh);
+      ctx.lineTo(x, y + TILE_H);
+      ctx.lineTo(x - hw, y + hh);
+      ctx.closePath();
+      ctx.clip();
+      ctx.drawImage(customImage, x - hw, y, TILE_W, TILE_H);
       ctx.restore();
       return;
     }

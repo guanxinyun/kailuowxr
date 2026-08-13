@@ -10,6 +10,7 @@ import { TutorialManager } from '../core/TutorialManager.js';
 import { textureManager } from '../core/TextureManager.js';
 import { TEXTURE_SLOTS, getTextureSlotsByCategory } from '../data/textureSlots.js';
 import { openCropModal } from './TextureCropModal.js';
+import { openBuildingFaceModal } from './BuildingFaceModal.js';
 import { canStartExpedition, startExpedition, generateRandomExpedition } from '../core/ExplorationSystem.js';
 import { getInventoryQuantity } from '../core/ProductionSystem.js';
 import { saveManager } from '../core/SaveManager.js';
@@ -358,6 +359,10 @@ function createTextureSettings() {
     const record = textureManager.getRecord(slot.id);
     const image = textureManager.getImage(slot.id);
     hint.textContent = slot.hint;
+    // 分面拼合按钮仅对非道路建筑显示；此时隐藏上传按钮
+    const isBuildingNotRoad = slot.kind === 'building' && slot.id !== 'building.road';
+    faceButton.style.display = isBuildingNotRoad ? '' : 'none';
+    uploadButton.style.display = isBuildingNotRoad ? 'none' : '';
     if (image) {
       preview.src = typeof image.src === 'string' ? image.src : '';
       if (!preview.src) {
@@ -428,6 +433,22 @@ function createTextureSettings() {
       gameState.addNotification({ title: '纹理上传失败', text: error.message, type: 'warning', icon: 'alert-triangle' });
     } finally {
       uploadButton.disabled = false;
+      refresh();
+    }
+  });
+
+  const faceButton = createElement('button', { className: 'btn' }, [
+    lucideIcon('box', 14), document.createTextNode(' 分面拼合'),
+  ]);
+  faceButton.addEventListener('click', async () => {
+    const slot = TEXTURE_SLOTS.find((entry) => entry.id === slotSelect.value);
+    const targetW = slot?.targetWidth || 128;
+    const targetH = slot?.targetHeight || 128;
+    const result = await openBuildingFaceModal(targetW, targetH);
+    if (result === 'cancel') return;
+    if (result instanceof Blob) {
+      await textureManager.install(slotSelect.value, result);
+      gameState.addNotification({ title: '纹理已更新', text: '分面拼合建筑纹理已应用', type: 'success', icon: 'image' });
       refresh();
     }
   });
@@ -505,7 +526,7 @@ function createTextureSettings() {
     });
   });
 
-  const controls = createElement('div', { className: 'texture-controls' }, [uploadButton, resetButton, clearButton, fileInput]);
+  const controls = createElement('div', { className: 'texture-controls' }, [uploadButton, faceButton, resetButton, clearButton, fileInput]);
   const packControls = createElement('div', { className: 'texture-pack-controls' }, [packName, exportButton, importButton, packInput]);
   section.appendChild(createElement('div', { className: 'texture-preview-row' }, [preview, createElement('div', {}, [hint, status])]));
   section.appendChild(controls);

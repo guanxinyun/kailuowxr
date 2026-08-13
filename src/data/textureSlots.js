@@ -12,15 +12,15 @@ const tileSlots = Object.keys(TILE_TYPES).map((tileType) => ({
 }));
 
 const buildingSlots = [
-  { id: 'building.road', label: '道路', category: 'building', kind: 'building', targetWidth: 64, targetHeight: 32, hint: '建议 64×32，中心对齐。' },
+  { id: 'building.road', label: '道路', category: 'building', kind: 'tile', targetWidth: 64, targetHeight: 32, hint: '上传正方形图片，等距投影为菱形道路。' },
   ...BUILDINGS.map((building) => ({
     id: `building.${building.id}`,
     label: `建筑：${building.name}`,
     category: 'building',
     kind: 'building',
-    targetWidth: 128,
-    targetHeight: 128,
-    hint: '建议透明 PNG，底部中心对齐，最大 128×128。',
+    targetWidth: 64,
+    targetHeight: 48,
+    hint: '建议透明 PNG，底部中心对齐，64×48。',
   })),
 ];
 
