@@ -3,6 +3,7 @@ import { gameState } from './GameState.js';
 import { BUILDINGS } from '../data/buildings.js';
 import { BUILDING_COMBOS } from '../data/combos.js';
 import { SPECIES } from '../data/species.js';
+import { TECHS, getTechById } from '../data/techs.js';
 import { aiClient } from '../ai/AIClient.js';
 import { createAITriggerState, recordMilestone, updateShortages, canCreateProposal, markTriggered } from './AITriggerSystem.js';
 
@@ -12,7 +13,8 @@ const CATEGORIES = new Set(['basic', 'food', 'science', 'culture', 'special']);
 const ICONS = new Set(['sparkles', 'factory', 'sprout', 'flask-conical', 'landmark', 'gem', 'sun', 'snowflake', 'leaf', 'radio', 'orbit', 'waves']);
 
 function contentState() {
-  if (!gameState.state.aiContent) gameState.state.aiContent = { enabled: true, pending: [], acceptedBuildings: [], acceptedCombos: [], acceptedSpecies: [], lastGeneratedDay: {}, triggers: createAITriggerState() };
+  if (!gameState.state.aiContent) gameState.state.aiContent = { enabled: true, pending: [], acceptedBuildings: [], acceptedCombos: [], acceptedSpecies: [], acceptedTechs: [], lastGeneratedDay: {}, triggers: createAITriggerState() };
+  if (!gameState.state.aiContent.acceptedTechs) gameState.state.aiContent.acceptedTechs = [];
   gameState.state.aiContent.triggers = createAITriggerState(gameState.state.aiContent.triggers);
   return gameState.state.aiContent;
 }
@@ -36,7 +38,8 @@ export function validateBuildingProposal(raw) {
   for (const [key, value] of Object.entries(raw.cost || {})) { if (!allowedCost.includes(key) || !Number.isFinite(value) || value < 1 || value > 150) return { ok: false, reason: '建造成本无效' }; cost[key] = Math.round(value); }
   if (!Object.keys(cost).length) return { ok: false, reason: '建筑必须有成本' };
   const effectByCategory = { food: { food: 5 }, science: { research: 3 }, culture: { happiness: 4, tourism: 3 }, basic: { energy: 3 }, special: { income: 4 } };
-  return { ok: true, value: { id: slug('building', raw.name), name: raw.name.trim(), category: raw.category, icon: ICONS.has(raw.icon) ? raw.icon : 'sparkles', desc: raw.desc.trim(), flavor: raw.flavor.trim(), cost, buildTime: 3, size: [2, 2], gravity, effect: effectByCategory[raw.category], unlockTech: null, generated: true } };
+  const unlockTech = raw.unlockTech && getTechById(raw.unlockTech) ? raw.unlockTech : null;
+  return { ok: true, value: { id: slug('building', raw.name), name: raw.name.trim(), category: raw.category, icon: ICONS.has(raw.icon) ? raw.icon : 'sparkles', desc: raw.desc.trim(), flavor: raw.flavor.trim(), cost, buildTime: 3, size: [2, 2], gravity, effect: effectByCategory[raw.category], unlockTech, generated: true } };
 }
 
 export function validateComboProposal(raw) {
@@ -64,6 +67,27 @@ export function validateSpeciesProposal(raw) {
   return { ok: true, value: { id, name: raw.name.trim(), homeworld: raw.homeworld.trim(), icon: ICONS.has(raw.icon) ? raw.icon : 'sparkles', color: /^#[0-9a-f]{6}$/i.test(raw.color) ? raw.color : '#8FB8D8', lore: raw.lore.trim(), trait: raw.trait.trim(), personality: raw.personality.trim(), gravityPreference, tiers: [{ level: 20, name: '初次交流', reward: '获得友好纪念品' }, { level: 50, name: '文化互访', reward: '旅游收入小幅提升' }, { level: 80, name: '深度理解', reward: '获得独特装饰' }], funfact: raw.funfact.trim(), initialReputation: 10, generated: true } };
 }
 
+export function validateTechProposal(raw) {
+  if (!raw || !text(raw.name, 18) || !text(raw.desc, 120) || !text(raw.flavor, 80)) return { ok: false, reason: '科技文本无效' };
+  if (TECHS.some(item => item.name === raw.name)) return { ok: false, reason: '科技名称重复' };
+  const tier = Number(raw.tier);
+  if (!Number.isFinite(tier) || tier < 1 || tier > 5) return { ok: false, reason: '科技阶级无效' };
+  if (!raw.cost || !Number.isFinite(raw.cost.research) || raw.cost.research < 10 || raw.cost.research > 200) return { ok: false, reason: '研究成本无效' };
+  const prereqs = Array.isArray(raw.prereqs) ? raw.prereqs.filter(id => getTechById(id)) : [];
+  if (!Array.isArray(raw.unlocks) || !raw.unlocks.length || raw.unlocks.some(u => typeof u !== 'string' || !u.trim())) return { ok: false, reason: '解锁内容无效' };
+  const gravity = {};
+  let gravityTotal = 0;
+  for (const dim of DIMS) { const value = Number(raw.gravity?.[dim] || 0); if (!Number.isFinite(value) || value < 0 || value > 8) return { ok: false, reason: '引力超出范围' }; gravity[dim] = value; gravityTotal += value; }
+  if (gravityTotal > 24) return { ok: false, reason: '引力预算超限' };
+  const icon = ICONS.has(raw.icon) ? raw.icon : 'sparkles';
+  // 自动分配位置：AI 科技放在树下方新行
+  const aiTechs = TECHS.filter(t => t.generated);
+  const col = aiTechs.length % 5;
+  const row = Math.floor(aiTechs.length / 5);
+  const position = { x: 100 + col * 160, y: 560 + row * 120 };
+  return { ok: true, value: { id: slug('tech', raw.name), name: raw.name.trim(), tier: Math.round(tier), icon, desc: raw.desc.trim(), flavor: raw.flavor.trim(), cost: { research: Math.round(raw.cost.research) }, prereqs, unlocks: raw.unlocks.map(u => u.trim()), gravity, position, generated: true } };
+}
+
 function fallback(type) {
   const state = contentState();
   const candidates = BUILDINGS.filter(b => b.id !== 'road');
@@ -77,11 +101,17 @@ function fallback(type) {
   if (type === 'building_proposal') return { name: `星辉休憩站${buildingIndex}型`, category: 'culture', icon: 'sparkles', desc: '利用柔和光谱为居民和游客提供安静休憩空间。', flavor: '连星光都愿意在这里坐一会儿。', cost: { metal: 45, energy: 20 }, gravity: { food: 0, knowledge: 1, comfort: 5, adventure: 0, culture: 3, nature: 1 } };
   if (type === 'combo_proposal') return { name: `邻里协奏${comboIndex}`, description: '相邻设施共享客流与维护经验，形成温和的协同。', buildingIds: pairs, effectKind: 'output' };
   if (type === 'species_proposal') return { name: `云絮漫游者${speciesIndex}支`, homeworld: '高空云海星 · 轻羽环带', icon: 'waves', color: '#9CCFE0', lore: '生活在浮空云海中的轻盈智慧生命，以交换故事记录旅程。', trait: '浮空迁徙 · 故事记忆', personality: '温和好奇，喜欢慢慢观察', gravityPreference: { food: 3, knowledge: 7, comfort: 6, adventure: 5, culture: 7, nature: 4 }, funfact: '它们用云朵的形状记录日期。' };
+  if (type === 'tech_proposal') {
+    const techIndex = state.acceptedTechs.length + state.pending.filter(item => item.type === 'tech_proposal').length + 1;
+    const researchedIds = gameState.state.researchedTechs || [];
+    const prereq = researchedIds.length ? [researchedIds[researchedIds.length - 1]] : [];
+    return { name: `星际协议${techIndex}型`, desc: '整合殖民地现有技术积累，开辟新的研究方向。', flavor: '每一次突破都始于一个大胆的假设。', tier: 2, cost: { research: 40 + techIndex * 10 }, prereqs: prereq, unlocks: ['新型设施蓝图'], gravity: { food: 0, knowledge: 4, comfort: 1, adventure: 2, culture: 1, nature: 0 } };
+  }
   return { comment: '这些设施的引力彼此呼应，继续观察布局变化，也许会出现新的协同。' };
 }
 
 function context(instruction = '') {
-  return { instruction: String(instruction).trim().slice(0, 300), day: gameState.state.day, year: gameState.state.year, buildings: BUILDINGS.map(({ id, name, category, gravity }) => ({ id, name, category, gravity })), exploredRegions: gameState.state.exploredRegions, species: SPECIES.map(({ id, name, gravityPreference }) => ({ id, name, gravityPreference })) };
+  return { instruction: String(instruction).trim().slice(0, 300), day: gameState.state.day, year: gameState.state.year, buildings: BUILDINGS.map(({ id, name, category, gravity }) => ({ id, name, category, gravity })), exploredRegions: gameState.state.exploredRegions, species: SPECIES.map(({ id, name, gravityPreference }) => ({ id, name, gravityPreference })), techs: TECHS.map(({ id, name, tier }) => ({ id, name, tier })), researchedTechs: gameState.state.researchedTechs };
 }
 
 const generating = new Set();
@@ -97,7 +127,7 @@ export async function generateProposal(type, instruction = '') {
     generating.delete(type);
   }
   if (type === 'combo_comment') return { ok: true, value: raw.comment || fallback(type).comment };
-  const validator = type === 'building_proposal' ? validateBuildingProposal : type === 'combo_proposal' ? validateComboProposal : validateSpeciesProposal;
+  const validator = type === 'building_proposal' ? validateBuildingProposal : type === 'combo_proposal' ? validateComboProposal : type === 'tech_proposal' ? validateTechProposal : validateSpeciesProposal;
   const result = validator(raw);
   if (!result.ok) return result;
   const item = proposal(type, result.value);
@@ -113,6 +143,7 @@ export function acceptProposal(id) {
   if (!item) return { ok: false, reason: '提案不存在' };
   if (item.type === 'building_proposal') { BUILDINGS.push(item.content); state.acceptedBuildings.push(item.content); }
   else if (item.type === 'combo_proposal') { BUILDING_COMBOS.push(item.content); state.acceptedCombos.push(item.content); }
+  else if (item.type === 'tech_proposal') { TECHS.push(item.content); state.acceptedTechs.push(item.content); }
   else if (item.type === 'species_proposal') { SPECIES.push(item.content); state.acceptedSpecies.push(item.content); gameState.state.diplomacy[item.content.id] = { reputation: item.content.initialReputation, contacted: true }; }
   state.pending = state.pending.filter(entry => entry.id !== id);
   bus.emit('ai-content:accepted', item);
@@ -127,6 +158,8 @@ export function restoreDynamicContent() {
   for (const item of state.acceptedBuildings) if (!BUILDINGS.some(entry => entry.id === item.id)) BUILDINGS.push(item);
   state.acceptedCombos = state.acceptedCombos.filter(item => validateComboProposal(item).ok || BUILDING_COMBOS.some(entry => entry.id === item.id));
   for (const item of state.acceptedCombos) if (!BUILDING_COMBOS.some(entry => entry.id === item.id)) BUILDING_COMBOS.push(item);
+  state.acceptedTechs = (state.acceptedTechs || []).filter(item => validateTechProposal(item).ok || TECHS.some(entry => entry.id === item.id));
+  for (const item of state.acceptedTechs) if (!TECHS.some(entry => entry.id === item.id)) TECHS.push(item);
   state.acceptedSpecies = state.acceptedSpecies.filter(item => validateSpeciesProposal(item).ok || SPECIES.some(entry => entry.id === item.id));
   for (const item of state.acceptedSpecies) { if (!SPECIES.some(entry => entry.id === item.id)) SPECIES.push(item); if (!gameState.state.diplomacy[item.id]) gameState.state.diplomacy[item.id] = { reputation: item.initialReputation || 10, contacted: true }; }
 }
@@ -147,7 +180,7 @@ function requestTriggeredProposal(type, instruction) {
 export function handleAIContentMilestone(kind, id, instruction = '') {
   const state = contentState();
   if (!state.enabled || !recordMilestone(state.triggers, `${kind}:${id}`)) return false;
-  const type = kind === 'diplomacy' ? 'species_proposal' : kind === 'combo' ? 'combo_proposal' : 'building_proposal';
+  const type = kind === 'diplomacy' ? 'species_proposal' : kind === 'combo' ? 'combo_proposal' : kind === 'tech' ? 'tech_proposal' : 'building_proposal';
   requestTriggeredProposal(type, instruction || `围绕${kind} ${id}生成适合当前殖民地的和平内容`);
   return true;
 }
@@ -162,6 +195,7 @@ export function updateDynamicContent() {
   const day = gameState.state.day;
   const due = (type, interval) => day - (state.lastGeneratedDay[type] || 0) >= interval;
   if (day >= 60 && due('building_proposal', 120)) requestTriggeredProposal('building_proposal', '提供一个符合当前发展阶段的设施');
+  else if (gameState.state.researchedTechs.length >= 3 && due('tech_proposal', 150)) requestTriggeredProposal('tech_proposal', '根据已研究科技提出新的研究课题，prereqs应引用已研究的科技ID');
   else if (gameState.state.buildings.length >= 6 && due('combo_proposal', 90)) requestTriggeredProposal('combo_proposal', '根据现有设施提出布局组合');
   else if ((gameState.state.exploredRegions.includes('signal_source') || gameState.state.year >= 2) && due('species_proposal', 240)) requestTriggeredProposal('species_proposal', '提出一个和平友好的访客种族');
 }

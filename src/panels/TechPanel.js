@@ -17,11 +17,14 @@ export function openTechPanel() {
   const svgNS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(svgNS, 'svg');
   svg.setAttribute('class', 'tech-tree-svg');
+  // 动态计算 SVG 高度以容纳 AI 生成的科技
+  const maxY = Math.max(520, ...TECHS.map(t => t.position.y + NODE_H + 40));
   svg.setAttribute('width', '900');
-  svg.setAttribute('height', '520');
+  svg.setAttribute('height', String(maxY));
 
   const researched = gameState.state.researchedTechs;
   const available = getAvailableTechs(researched).map(t => t.id);
+  const researchingId = gameState.state.currentResearch?.techId || null;
 
   // Draw connections first
   for (const tech of TECHS) {
@@ -53,10 +56,11 @@ export function openTechPanel() {
   for (const tech of TECHS) {
     const isResearched = researched.includes(tech.id);
     const isAvailable = available.includes(tech.id);
+    const isResearching = tech.id === researchingId;
     const isLocked = !isResearched && !isAvailable;
 
     const g = document.createElementNS(svgNS, 'g');
-    g.setAttribute('class', `tech-node ${isResearched ? 'researched' : isAvailable ? 'available' : 'locked'}`);
+    g.setAttribute('class', `tech-node ${isResearched ? 'researched' : isResearching ? 'researching' : isAvailable ? 'available' : 'locked'}`);
     g.setAttribute('transform', `translate(${tech.position.x}, ${tech.position.y})`);
 
     // Background rect
@@ -100,6 +104,13 @@ export function openTechPanel() {
       check.setAttribute('y', '20');
       check.textContent = '✓';
       g.appendChild(check);
+    } else if (isResearching) {
+      const spin = document.createElementNS(svgNS, 'text');
+      spin.setAttribute('class', 'tech-node-researching');
+      spin.setAttribute('x', NODE_W - 18);
+      spin.setAttribute('y', '20');
+      spin.textContent = '⟳';
+      g.appendChild(spin);
     }
 
     // Click handler
@@ -148,12 +159,13 @@ function showTechDetail(tech, container, event) {
   const researched = gameState.state.researchedTechs;
   const isResearched = researched.includes(tech.id);
   const isAvailable = getAvailableTechs(researched).some(t => t.id === tech.id);
+  const isResearching = gameState.state.currentResearch?.techId === tech.id;
 
   const card = createElement('div', { className: 'tech-detail-card' });
 
   card.innerHTML = `
     <div class="tech-detail-name">${tech.name}</div>
-    <div class="tech-detail-tier">${tech.tier}阶 ${isResearched ? '· 已研究' : isAvailable ? '· 可研究' : '· 锁定'}</div>
+    <div class="tech-detail-tier">${tech.tier}阶 ${isResearched ? '· 已研究' : isResearching ? '· 研究中' : isAvailable ? '· 可研究' : '· 锁定'}</div>
     <div class="tech-detail-section">
       <div class="tech-detail-section-title">描述</div>
       <div style="font-size:13px;color:var(--text-secondary);line-height:1.6">${tech.desc}</div>

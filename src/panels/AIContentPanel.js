@@ -5,7 +5,7 @@ import { createElement, lucideIcon } from '../core/utils.js';
 import { acceptProposal, generateProposal, rejectProposal } from '../core/DynamicContentSystem.js';
 import { aiClient } from '../ai/AIClient.js';
 
-const LABELS = { building_proposal: '新建筑', combo_proposal: '新组合', species_proposal: '新外星种族' };
+const LABELS = { building_proposal: '新建筑', combo_proposal: '新组合', species_proposal: '新外星种族', tech_proposal: '新科技' };
 
 export function openAIContentPanel() {
   const container = createElement('div', { className: 'ai-content-panel' });
@@ -76,7 +76,9 @@ export function openAIContentPanel() {
         ? `${content.category} · 成本 ${Object.entries(content.cost).map(([key, value]) => `${key} ${value}`).join('、')}`
         : item.type === 'combo_proposal'
           ? `${content.buildingIds.join(' + ')} · ${content.effectText}`
-          : `${content.homeworld} · ${content.personality}`;
+          : item.type === 'tech_proposal'
+            ? `${content.tier}阶 · 研究 ${content.cost.research} · ${content.unlocks.join('、')}`
+            : `${content.homeworld} · ${content.personality}`;
       const card = createElement('div', { className: 'ai-proposal-card' }, [
         createElement('div', { className: 'ai-proposal-header' }, [createElement('strong', {}, [content.name]), createElement('span', {}, [LABELS[item.type]])]),
         createElement('p', {}, [content.desc || content.description || content.lore]),
@@ -92,7 +94,7 @@ export function openAIContentPanel() {
     container.appendChild(pending);
 
     container.appendChild(createElement('div', { className: 'ai-content-accepted' }, [
-      `已接受：建筑 ${state.acceptedBuildings.length} · 组合 ${state.acceptedCombos.length} · 外星种族 ${state.acceptedSpecies.length}`,
+      `已接受：建筑 ${state.acceptedBuildings.length} · 组合 ${state.acceptedCombos.length} · 科技 ${(state.acceptedTechs || []).length} · 外星种族 ${state.acceptedSpecies.length}`,
     ]));
   };
 

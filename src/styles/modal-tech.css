@@ -63,6 +63,12 @@
   stroke-width: 2;
   animation: pulseBorder 2s infinite;
 }
+.tech-node.researching .tech-node-bg {
+  fill: rgba(255,180,60,0.15);
+  stroke: rgba(255,180,60,0.6);
+  stroke-width: 2;
+  animation: pulseBorder 1.5s infinite;
+}
 .tech-node.locked .tech-node-bg {
   fill: rgba(40,45,70,0.5);
   stroke: rgba(80,90,120,0.3);
@@ -96,6 +102,18 @@
 .tech-node-check {
   fill: var(--color-success);
   font-size: 14px;
+}
+
+.tech-node-researching {
+  fill: rgba(255,180,60,0.9);
+  font-size: 14px;
+  animation: spinIcon 2s linear infinite;
+  transform-origin: center;
+}
+
+@keyframes spinIcon {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .tech-node-lock {

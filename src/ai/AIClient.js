@@ -1,12 +1,13 @@
 const USER_CONFIG_KEY = 'stardust-ai-user-config';
 const TIMEOUT_MS = 15000;
 const FAILURE_LIMIT = 3;
-const JSON_TYPES = new Set(['building_proposal', 'combo_proposal', 'species_proposal', 'combo_comment', 'product_copy']);
+const JSON_TYPES = new Set(['building_proposal', 'combo_proposal', 'species_proposal', 'tech_proposal', 'combo_comment', 'product_copy']);
 
 const SCHEMAS = {
-  building_proposal: '{"name":"中文名","category":"basic|food|science|culture|special","icon":"Lucide图标名","desc":"描述","flavor":"趣味文案","cost":{"metal":20,"energy":10},"gravity":{"food":0,"knowledge":0,"comfort":0,"adventure":0,"culture":0,"nature":0}}',
+  building_proposal: '{"name":"中文名","category":"basic|food|science|culture|special","icon":"Lucide图标名","desc":"描述","flavor":"趣味文案","cost":{"metal":20,"energy":10},"gravity":{"food":0,"knowledge":0,"comfort":0,"adventure":0,"culture":0,"nature":0},"unlockTech":"前置科技ID或null"}',
   combo_proposal: '{"name":"中文名","description":"逻辑原因","buildingIds":["现有建筑ID","现有建筑ID"],"effectKind":"output|production|tourism"}',
   species_proposal: '{"name":"中文名","homeworld":"母星","icon":"Lucide图标名","color":"#RRGGBB","lore":"背景","trait":"特征","personality":"性格","gravityPreference":{"food":1,"knowledge":1,"comfort":1,"adventure":1,"culture":1,"nature":1},"funfact":"趣闻"}',
+  tech_proposal: '{"name":"中文名(不超过8字)","desc":"描述(不超过60字)","flavor":"趣味文案(不超过40字)","tier":2,"cost":{"research":50},"prereqs":["已有科技ID"],"unlocks":["解锁内容描述"],"gravity":{"food":0,"knowledge":0,"comfort":0,"adventure":0,"culture":0,"nature":0}}',
   combo_comment: '{"comment":"不超过80字的布局评价"}',
   product_copy: '{"displayName":"不超过20字的展示别名","description":"不超过100字且只描述给定事实"}',
 };

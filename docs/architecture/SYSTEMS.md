@@ -14,11 +14,11 @@
 | `exploration` | 已实现 | `state.unlockedRegions/activeExploration/mapExpansion` | 8个特殊区域通过事件解锁，奖励随机掷骰，每区域一次；无限随机考察任务；购买地图拓展从已探索边缘向四周均匀扩散3层。 |
 | `production` | 部分实现 | `state.production` | 综合工坊将基础资源加工为合金、电路、补给和纪念品；队列按游戏日推进并保存品质。 |
 | `ai-narrative` | 已实现+降级 | `AIRequestQueue/AIClient` | 产品、游客、考察、事实日记和年度评语支持玩家模型与本地模板；AI 不控制数值。 |
-| `dynamic-ai-content` | 已实现 | `state.aiContent` | 通过玩家自己的 OpenAI 兼容接口或本地降级，在游玩中生成建筑、组合评价和外星种族；规则经本地校验并由玩家确认。 |
+| `dynamic-ai-content` | 已实现 | `state.aiContent` | 通过玩家自己的 OpenAI 兼容接口或本地降级，在游玩中生成建筑、组合评价、外星种族和新科技；AI 生成的建筑可通过 `unlockTech` 引用 AI 科技作为前置；规则经本地校验并由玩家确认。 |
 | `saves` | 已实现 | `localStorage` 存档槽位 | 三个本地存档槽位，支持命名、保存、读取、删除及当前格式 JSON 导入导出。 |
 | `annual-review` | 已实现 | `state.annualReview` | 根据设施运营、居民成长、生产加工、组合、资源、探索和外交生成确定性分数；AI 只写评语。 |
 | `ui-panels` | 已实现 | `UIManager` + DOM | 模态框（flexbox 布局，body 不硬编码 max-height）、顶栏、通知及各功能面板；所有 UI 文本为中文（级、阶、经验等）；点击地图建筑打开右侧信息面板（含升级/拆除）。教程包含游客引导和建筑信息提示。 |
-| `content-data` | 已实现 | `src/data` 常量 | 建筑、科技、居民、种族、区域和事件定义。部分定义效果尚无运行逻辑。 |
+| `content-data` | 已实现 | `src/data` 常量 | 建筑、科技、居民、种族、区域和事件定义；科技树支持动态高度以容纳 AI 生成节点，正在研究的节点有琥珀色脉冲标记。部分定义效果尚无运行逻辑。 |
 
 ## 主要契约
 
@@ -34,7 +34,7 @@
 
 ### AI
 - 叙事路径：面板/事件 → `AIAdvisor` → `AIRequestQueue` → 校验 → 本地 fallback。
-- 动态内容路径：`AITriggerSystem` 检测里程碑 → `DynamicContentSystem.generateProposal` → `AIClient` → 本地校验 → 玩家确认。
+- 动态内容路径：`AITriggerSystem` 检测里程碑 → `DynamicContentSystem.generateProposal` → `AIClient` → 本地校验 → 玩家确认。支持 `building_proposal`、`combo_proposal`、`species_proposal`、`tech_proposal` 四种类型。
 - `AIClient` 支持玩家自填 OpenAI 兼容端点（`sessionStorage`），密钥不进存档或 `localStorage`。
 - 正确边界：本地系统先生成不可变事实与结果，AI 只能改写文本；失败立即使用本地模板。
 
