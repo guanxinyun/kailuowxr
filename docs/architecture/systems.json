@@ -33,9 +33,9 @@
       "id": "rendering",
       "name": "Canvas 渲染与精灵",
       "status": "implemented",
-      "summary": "绘制等距地形、建筑、热力图、居民和游客，并处理地图输入。自定义纹理支持上传裁剪和地形等距投影（正方形→菱形仿射变换）。",
+      "summary": "绘制等距地形、建筑、热力图、居民和游客，并处理地图输入。自定义纹理：地形和道路等距投影+菱形clip平铺，建筑分面拼合（正面/顶面/侧面仿射变换）。",
       "owns": ["Canvas 图层", "显示精灵和相机"],
-      "files": ["src/core/CanvasRenderer.js", "src/core/ResidentSprites.js", "src/panels/TextureCropModal.js"],
+      "files": ["src/core/CanvasRenderer.js", "src/core/ResidentSprites.js", "src/panels/TextureCropModal.js", "src/panels/BuildingFaceModal.js"],
       "callers": ["src/main.js", "src/core/TouristManager.js"],
       "exports": [
         {"file": "src/core/CanvasRenderer.js", "names": ["CanvasRenderer"]},

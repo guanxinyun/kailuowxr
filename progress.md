@@ -84,3 +84,12 @@
 - ✅ panels.css — 预览布局样式（crop-canvas-row, crop-preview-box）
 - ✅ CanvasRenderer.js 无需修改（已有菱形clip，输出PNG已是投影后的菱形）
 - ✅ 构建通过 + 浏览器验收零错误
+
+### 建筑分面拼合 + 道路等距投影
+- ✅ 新建 BuildingFaceModal.js — 正面/顶面/侧面仿射变换拼合等距建筑
+- ✅ 滑块调整宽/深/高比例，实时预览（128×128棋盘格），输出 64×48 透明 PNG
+- ✅ UtilityPanels.js — 建筑槽位只显示"分面拼合"按钮
+- ✅ 道路 kind 改为 tile，走等距投影（正方形→菱形）
+- ✅ CanvasRenderer.js — 道路自定义纹理改为地面平铺+菱形clip（与地形一致）
+- ✅ 建筑 targetSize 改为 64×48
+- ✅ 构建通过

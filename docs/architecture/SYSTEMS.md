@@ -6,7 +6,7 @@
 |---|---|---|---|
 | `runtime` | 已实现 | `GameState` | 启动、每日 tick、系统编排和建筑放置；`main.js` 仍较集中。 |
 | `state` | 部分实现 | `GameState._state` | 资源、时间、建筑、居民、存档；旧存档迁移和结构校验尚缺。 |
-| `rendering` | 已实现 | Renderer 实例 | 等距 Canvas、程序地形/建筑、居民和游客精灵；未连接降落点的建筑显示红色警告三角；画布点击/拖拽仅响应左键，右键专用于退出放置模式；支持触屏双指缩放（pinch-to-zoom）；自定义纹理支持上传裁剪，地形纹理通过仿射变换等距投影（正方形→菱形），菱形 clip 渲染。 |
+| `rendering` | 已实现 | Renderer 实例 | 等距 Canvas、程序地形/建筑、居民和游客精灵；未连接降落点的建筑显示红色警告三角；画布点击/拖拽仅响应左键，右键专用于退出放置模式；支持触屏双指缩放（pinch-to-zoom）；自定义纹理：地形和道路通过等距投影（正方形→菱形）+菱形clip平铺渲染，建筑通过分面拼合（正面/顶面/侧面仿射变换）生成等距建筑图。 |
 | `map-navigation` | 部分实现 | `state.map` | 地图生成、坐标转换、A*、道路/HQ 连通判断；山地/水域可通过科技解锁建筑（mountain_engineering/water_engineering），地形产出加成由 TERRAIN_BONUSES 查表。 |
 | `building-economy` | 部分实现 | `state.buildings/resources` | 建造、道路运营、升级（2级+30/3级+80星币+加工品）、拆除（退还50%资源）、组合、加工和按天资源流已实现；建筑可连续铺设（资源耗尽或按ESC/右键退出）。贸易站支持货架挂售、采购资源和宣传引流。 |
 | `residents` | 部分实现 | `state.residents` | 六项技能、心情、日记与地图移动；经验、熟练度、体力、劳动力、探索力及住宅阶段由 ResidentGrowthSystem 管理。战斗不在项目范围内。 |
