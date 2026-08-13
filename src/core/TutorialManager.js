@@ -44,6 +44,20 @@ const TUTORIAL_STEPS = [
     waitForEvent: null,
   },
   {
+    id: 'tourists',
+    title: '吸引外星游客',
+    text: '建造\"殖民广场\"等文化建筑并用道路连接降落点，就能吸引外星游客来访。游客会消费星币、提升外交好感度！',
+    highlight: null,
+    waitForEvent: null,
+  },
+  {
+    id: 'building_info',
+    title: '查看建筑信息',
+    text: '点击地图上已建好的建筑可以查看详细信息，包括运营状态、产出和引力场。在信息面板中还可以升级或拆除建筑。',
+    highlight: '#canvas-container',
+    waitForEvent: null,
+  },
+  {
     id: 'speed_control',
     title: '控制时间流速',
     text: '使用顶部的速度按钮控制游戏速度，或按空格键暂停/继续。加速可以更快看到资源产出！',

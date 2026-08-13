@@ -17,7 +17,7 @@
 | `dynamic-ai-content` | 已实现 | `state.aiContent` | 通过玩家自己的 OpenAI 兼容接口或本地降级，在游玩中生成建筑、组合评价和外星种族；规则经本地校验并由玩家确认。 |
 | `saves` | 已实现 | `localStorage` 存档槽位 | 三个本地存档槽位，支持命名、保存、读取、删除及当前格式 JSON 导入导出。 |
 | `annual-review` | 已实现 | `state.annualReview` | 根据设施运营、居民成长、生产加工、组合、资源、探索和外交生成确定性分数；AI 只写评语。 |
-| `ui-panels` | 已实现 | `UIManager` + DOM | 模态框（flexbox 布局，body 不硬编码 max-height）、顶栏、通知及各功能面板；点击地图建筑打开右侧信息面板（含升级/拆除）。 |
+| `ui-panels` | 已实现 | `UIManager` + DOM | 模态框（flexbox 布局，body 不硬编码 max-height）、顶栏、通知及各功能面板；点击地图建筑打开右侧信息面板（含升级/拆除）。教程包含游客引导和建筑信息提示。 |
 | `content-data` | 已实现 | `src/data` 常量 | 建筑、科技、居民、种族、区域和事件定义。部分定义效果尚无运行逻辑。 |
 
 ## 主要契约
