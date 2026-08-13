@@ -2,7 +2,7 @@ import { gameState } from '../core/GameState.js';
 import { ui } from '../core/UIManager.js';
 import { createElement, lucideIcon } from '../core/utils.js';
 import { PRODUCTION_RECIPES, getQuality } from '../data/production.js';
-import { canStartProduction, getEstimatedProductionQuality, getProductionSummary, startProduction } from '../core/ProductionSystem.js';
+import { canStartProduction, getEstimatedProductionQuality, getProductionSummary, startProduction, getAutoQueue, setAutoProduction, cancelAutoProduction } from '../core/ProductionSystem.js';
 import { bus } from '../core/EventBus.js';
 
 const PRODUCT_COPY = new Map();
@@ -14,6 +14,12 @@ const RESOURCE_NAMES = {
   food: '食物',
   alloy: '星尘合金',
   crystal_circuit: '晶体电路',
+  nutrient_pack: '营养补给包',
+  energy_cell: '能量电池',
+  bio_sample: '生态标本',
+  thermal_kit: '保温考察包',
+  cooling_kit: '降温考察包',
+  star_souvenir: '星尘纪念品',
 };
 
 export function openProductionPanel() {
@@ -90,6 +96,42 @@ export function openProductionPanel() {
         render();
       });
       card.appendChild(button);
+
+      // 自动生产控制
+      const autoQueue = getAutoQueue();
+      const autoEntry = autoQueue.find(e => e.recipeId === recipe.id);
+      const autoDiv = createElement('div', { className: 'production-auto-controls' });
+
+      if (autoEntry) {
+        const label = autoEntry.mode === 'continuous'
+          ? '持续生产中'
+          : `自动：剩余 ${autoEntry.remaining} 个`;
+        autoDiv.appendChild(createElement('span', { className: 'auto-status active' }, [label]));
+        const cancelBtn = createElement('button', { className: 'btn btn-sm btn-danger' }, ['取消']);
+        cancelBtn.addEventListener('click', () => { cancelAutoProduction(recipe.id); render(); });
+        autoDiv.appendChild(cancelBtn);
+      } else {
+        const countInput = createElement('input', {
+          type: 'number', min: '1', max: '99', value: '5',
+          className: 'auto-count-input',
+        });
+        const countBtn = createElement('button', { className: 'btn btn-sm' }, ['产N个']);
+        countBtn.addEventListener('click', () => {
+          const n = parseInt(countInput.value) || 5;
+          setAutoProduction(recipe.id, 'count', n);
+          render();
+        });
+        const contBtn = createElement('button', { className: 'btn btn-sm' }, ['持续']);
+        contBtn.addEventListener('click', () => {
+          setAutoProduction(recipe.id, 'continuous');
+          render();
+        });
+        autoDiv.appendChild(countInput);
+        autoDiv.appendChild(countBtn);
+        autoDiv.appendChild(contBtn);
+      }
+      card.appendChild(autoDiv);
+
       recipes.appendChild(card);
     }
     container.appendChild(recipes);
@@ -100,6 +142,7 @@ export function openProductionPanel() {
     bus.on('production:inventory', render),
     bus.on('production:started', render),
     bus.on('production:completed', render),
+    bus.on('production:autoqueue-changed', render),
     bus.on('production:copy', ({ productId, copy }) => { PRODUCT_COPY.set(productId, copy); render(); }),
   ];
   render();

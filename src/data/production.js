@@ -17,6 +17,7 @@ export const PRODUCTION_RECIPES = [
     output: { id: 'alloy', name: '星尘合金', quantity: 1 },
     days: 2,
     requiredBuilding: 'workshop',
+    autoBuilding: 'mine',
   },
   {
     id: 'crystal_circuit',
@@ -28,6 +29,7 @@ export const PRODUCTION_RECIPES = [
     output: { id: 'crystal_circuit', name: '晶体电路', quantity: 1 },
     days: 3,
     requiredBuilding: 'workshop',
+    autoBuilding: 'crystal_extractor',
   },
   {
     id: 'nutrient_pack',
@@ -39,6 +41,31 @@ export const PRODUCTION_RECIPES = [
     output: { id: 'nutrient_pack', name: '营养补给包', quantity: 2 },
     days: 2,
     requiredBuilding: 'workshop',
+    autoBuilding: 'hydro_farm',
+  },
+  {
+    id: 'energy_cell',
+    name: '能量电池',
+    category: 'processed',
+    icon: 'battery-charging',
+    desc: '浓缩能量单元，可用于建造和交易。',
+    inputs: { energy: 15, metal: 3 },
+    output: { id: 'energy_cell', name: '能量电池', quantity: 2 },
+    days: 2,
+    requiredBuilding: 'workshop',
+    autoBuilding: 'solar_panel',
+  },
+  {
+    id: 'bio_sample',
+    name: '生态标本',
+    category: 'goods',
+    icon: 'leaf',
+    desc: '珍贵的异星生态样本，科研和旅游价值兼具。',
+    inputs: { food: 8, crystal: 2 },
+    output: { id: 'bio_sample', name: '生态标本', quantity: 1 },
+    days: 3,
+    requiredBuilding: 'workshop',
+    autoBuilding: 'greenhouse',
   },
   {
     id: 'thermal_kit',
@@ -50,6 +77,7 @@ export const PRODUCTION_RECIPES = [
     output: { id: 'thermal_kit', name: '保温考察包', quantity: 1 },
     days: 3,
     requiredBuilding: 'workshop',
+    autoBuilding: null,
   },
   {
     id: 'cooling_kit',
@@ -61,6 +89,7 @@ export const PRODUCTION_RECIPES = [
     output: { id: 'cooling_kit', name: '降温考察包', quantity: 1 },
     days: 4,
     requiredBuilding: 'workshop',
+    autoBuilding: null,
   },
   {
     id: 'star_souvenir',
@@ -72,6 +101,7 @@ export const PRODUCTION_RECIPES = [
     output: { id: 'star_souvenir', name: '星尘纪念品', quantity: 1 },
     days: 3,
     requiredBuilding: 'workshop',
+    autoBuilding: null,
   },
 ];
 

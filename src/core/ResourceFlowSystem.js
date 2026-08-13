@@ -1,7 +1,7 @@
 import { BALANCE } from '../data/balance.js';
 import { gameState } from './GameState.js';
 import { getBuildingById } from '../data/buildings.js';
-import { SEASONS } from '../data/gamedata.js';
+import { SEASONS, TERRAIN_BONUSES } from '../data/gamedata.js';
 import { getBuildingEfficiency, getBuildingOperationalState } from './BuildingSystem.js';
 import { getComboMultiplier } from './ComboSystem.js';
 
@@ -25,6 +25,7 @@ export function calculateBuildingDailyOutput(data, building = {}, context = {}) 
     if (resource === 'food') multiplier *= (context.farmingSkill ?? 1) * (context.foodMultiplier ?? 1);
     if (resource === 'energy') multiplier *= context.energyMultiplier ?? 1;
     if (resource === 'research') multiplier *= (context.researchSkill ?? 1) * (context.researchMultiplier ?? 1);
+    multiplier *= context.terrainMultiplier ?? 1;
     multiplier *= typeof context.comboMultiplier === 'function' ? context.comboMultiplier(resource) : 1;
     output[resource] = base * multiplier;
   }
@@ -62,6 +63,18 @@ function currentContext(building, state, dependencies = {}) {
   const getOperational = dependencies.getOperational || getBuildingOperationalState;
   const getEfficiency = dependencies.getEfficiency || getBuildingEfficiency;
   const getCombo = dependencies.getCombo || ((type, context) => getComboMultiplier(type, context));
+
+  // 地形加成：查找建筑所在格子的地形类型
+  let terrainMult = 1;
+  const map = state.map;
+  if (map && map[building.y]?.[building.x]) {
+    const tileType = map[building.y][building.x].type;
+    const bonuses = TERRAIN_BONUSES[tileType];
+    if (bonuses && bonuses[building.buildingId]) {
+      terrainMult = bonuses[building.buildingId];
+    }
+  }
+
   return {
     operational: getOperational(building).operational,
     levelEfficiency: getEfficiency(building),
@@ -72,6 +85,7 @@ function currentContext(building, state, dependencies = {}) {
     foodMultiplier: (season.effect?.food || 1) * (state.farmBonus || 1),
     energyMultiplier: season.effect?.energy || 1,
     researchMultiplier: (season.effect?.research || 1) * (state.researchBonus || 1),
+    terrainMultiplier: terrainMult,
     comboMultiplier: (resource) => getCombo('building_output', { buildingId: building.buildingId, resource }),
   };
 }

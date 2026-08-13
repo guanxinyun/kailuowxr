@@ -9,7 +9,7 @@ import { ui } from './core/UIManager.js';
 import { aiAdvisor } from './core/AIAdvisor.js';
 import { $, $$, createElement, lucideIcon, formatNumber } from './core/utils.js';
 import { generateMap } from './core/MapGenerator.js';
-import { RESOURCES, GRAVITY_CONFIG, SEASONS } from './data/gamedata.js';
+import { RESOURCES, GRAVITY_CONFIG, SEASONS, TILE_TYPES } from './data/gamedata.js';
 import { BUILDINGS, getBuildingById } from './data/buildings.js';
 import { openBuildPanel } from './panels/BuildPanel.js';
 import { openTechPanel } from './panels/TechPanel.js';
@@ -23,11 +23,12 @@ import { openBuildingManagementPanel } from './panels/BuildingManagementPanel.js
 import { openTourismPanel } from './panels/TourismPanel.js';
 import { TutorialManager } from './core/TutorialManager.js';
 import { updateTouristSystem } from './core/TouristManager.js';
-import { updateProductionSystem } from './core/ProductionSystem.js';
+import { updateProductionSystem, updateBuildingAutoProduction, processAutoQueue, getInventoryEntry, addInventory } from './core/ProductionSystem.js';
 import { RESIDENT_NAME_POOL, TRAIT_POOL } from './data/residents.js';
 import { textureManager } from './core/TextureManager.js';
 import { getBuildingEfficiency, getBuildingOperationalState, getBuildingLevel, getUpgradeCost, upgradeBuilding, demolishBuilding } from './core/BuildingSystem.js';
 import { evaluateCombos } from './core/ComboSystem.js';
+import { updateTradeSystem, ensureTradeState } from './core/TradeSystem.js';
 import { normalizeAllResidents, updateResidentGrowth } from './core/ResidentGrowthSystem.js';
 import { normalizeExplorationState, updateExplorationSystem, unlockRegion } from './core/ExplorationSystem.js';
 import { saveManager } from './core/SaveManager.js';
@@ -50,6 +51,7 @@ async function init() {
   }
   normalizeAllResidents();
   normalizeExplorationState();
+  ensureTradeState();
   restoreDynamicContent();
 
   // 事件解锁探索区域
@@ -93,12 +95,52 @@ async function init() {
   bus.on('building:place', ({ building: buildingId, tile }) => {
     const data = getBuildingById(buildingId);
     if (!data) return;
-    if (!gameState.canAfford(data.cost)) {
+
+    // 计算总建造成本（基础 + 地形额外）
+    const tileInfo = TILE_TYPES[tile.type];
+    const isSpecialTerrain = !tileInfo.buildable && tileInfo.techUnlock;
+    let totalCost = { ...data.cost };
+
+    if (isSpecialTerrain) {
+      // 特殊地形：基础成本 ×1.8 + 星币
+      const terrainMult = BALANCE.trade.terrainCostMultiplier;
+      for (const key of Object.keys(totalCost)) {
+        totalCost[key] = Math.ceil(totalCost[key] * terrainMult);
+      }
+      totalCost.credits = (totalCost.credits || 0) + BALANCE.trade.terrainCredits;
+
+      // 检查加工品需求
+      const requiredProducts = tile.type === 'mountain'
+        ? BALANCE.trade.mountainProducts
+        : BALANCE.trade.waterProducts;
+      for (const [pid, qty] of Object.entries(requiredProducts)) {
+        const inv = getInventoryEntry(pid);
+        if (!inv || inv.quantity < qty) {
+          const recipeName = pid === 'alloy' ? '星尘合金' : '晶体电路';
+          gameState.addNotification({ title: '材料不足', text: `在${tileInfo.name}上建造需要 ${qty} ${recipeName}`, type: 'warning', icon: 'alert-triangle' });
+          return;
+        }
+      }
+    }
+
+    if (!gameState.canAfford(totalCost)) {
       gameState.addNotification({ title: '资源不足', text: `建造${data.name}所需资源不足`, type: 'warning', icon: 'alert-triangle' });
       return;
     }
 
-    gameState.spend(data.cost);
+    // 扣除资源
+    gameState.spend(totalCost);
+
+    // 扣除加工品
+    if (isSpecialTerrain) {
+      const requiredProducts = tile.type === 'mountain'
+        ? BALANCE.trade.mountainProducts
+        : BALANCE.trade.waterProducts;
+      for (const [pid, qty] of Object.entries(requiredProducts)) {
+        addInventory(pid, -qty);
+      }
+    }
+
     gameState.addBuilding({
       id: `bld_${Date.now()}`,
       buildingId,
@@ -118,7 +160,8 @@ async function init() {
     if (!gameState.canAfford(data.cost)) {
       gameState.set('placingBuilding', null);
     }
-    gameState.addNotification({ title: '开始建造', text: `${data.name} 建造中...`, type: 'success', icon: 'hammer' });
+    const terrainNote = isSpecialTerrain ? `（${tileInfo.name}地形）` : '';
+    gameState.addNotification({ title: '开始建造', text: `${data.name}${terrainNote} 建造中...`, type: 'success', icon: 'hammer' });
     renderer.markDirty();
   });
 
@@ -220,6 +263,7 @@ function gameTick() {
   gameState.advanceDay();
 
   evaluateCombos();
+  updateTradeSystem();
   updateResidentGrowth();
   updateExplorationSystem();
   updateDynamicContent();
@@ -397,6 +441,8 @@ function gameTick() {
 
   // 生产加工系统
   updateProductionSystem();
+  processAutoQueue();
+  updateBuildingAutoProduction();
 
   // 外星游客系统
   updateTouristSystem();

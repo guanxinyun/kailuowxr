@@ -43,18 +43,22 @@ export function validateBuildingProposal(raw) {
 }
 
 export function validateComboProposal(raw) {
-  if (!raw || !text(raw.name, 20) || !text(raw.description, 120) || !Array.isArray(raw.buildingIds) || raw.buildingIds.length !== 2) return { ok: false, reason: '组合格式无效' };
-  const ids = [...new Set(raw.buildingIds)];
-  if (ids.length !== 2 || ids.some(id => !BUILDINGS.some(building => building.id === id))) return { ok: false, reason: '组合引用未知建筑' };
-  if (BUILDING_COMBOS.some(item => item.name === raw.name || item.buildingIds.every(id => ids.includes(id)))) return { ok: false, reason: '组合重复' };
+  if (!raw || !text(raw.name, 20) || !text(raw.description, 120) || !Array.isArray(raw.buildingIds) || raw.buildingIds.length < 2 || raw.buildingIds.length > 5) return { ok: false, reason: '组合格式无效' };
+  const ids = raw.buildingIds;
+  if (ids.some(id => !BUILDINGS.some(building => building.id === id))) return { ok: false, reason: '组合引用未知建筑' };
+  // 检查重复：同一组合（相同建筑集合）不能重复
+  const sortedIds = [...ids].sort();
+  if (BUILDING_COMBOS.some(item => item.name === raw.name || (item.buildingIds.length === sortedIds.length && [...item.buildingIds].sort().every((id, i) => id === sortedIds[i])))) return { ok: false, reason: '组合重复' };
+  const maxDist = ids.length <= 2 ? 2 : ids.length <= 3 ? 3 : ids.length <= 4 ? 4 : 5;
   const effects = {
-    output: [{ type: 'building_output', buildingIds: ids, multiplier: 1.12 }],
-    production: [{ type: 'production_speed', multiplier: 1.12 }],
-    tourism: [{ type: 'tourism_attraction', buildingIds: ids, multiplier: 1.15 }],
+    output: [{ type: 'building_output', buildingIds: ids, multiplier: 1 + 0.06 * ids.length }],
+    production: [{ type: 'production_speed', multiplier: 1 + 0.06 * ids.length }],
+    tourism: [{ type: 'tourism_attraction', buildingIds: ids, multiplier: 1 + 0.08 * ids.length }],
   };
   const kind = effects[raw.effectKind] ? raw.effectKind : 'output';
-  const labels = { output: '参与设施产出 +12%', production: '加工速度 +12%', tourism: '参与设施旅游吸引力 +15%' };
-  return { ok: true, value: { id: slug('combo', raw.name), name: raw.name.trim(), icon: 'sparkles', buildingIds: ids, maxDistance: 2, description: raw.description.trim(), effects: effects[kind], effectText: labels[kind], generated: true } };
+  const pct = kind === 'tourism' ? Math.round(8 * ids.length) : Math.round(6 * ids.length);
+  const labels = { output: `参与设施产出 +${pct}%`, production: `加工速度 +${pct}%`, tourism: `参与设施旅游吸引力 +${pct}%` };
+  return { ok: true, value: { id: slug('combo', raw.name), name: raw.name.trim(), icon: 'sparkles', buildingIds: ids, maxDistance: maxDist, description: raw.description.trim(), effects: effects[kind], effectText: labels[kind], generated: true } };
 }
 
 export function validateSpeciesProposal(raw) {

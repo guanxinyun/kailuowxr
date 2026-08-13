@@ -6,6 +6,9 @@ import { RESOURCES } from '../data/gamedata.js';
 import { getManagedBuildings, upgradeBuilding } from '../core/BuildingSystem.js';
 import { getComboSummary } from '../core/ComboSystem.js';
 import { getCurrentBuildingDailyOutput, formatDailyRate } from '../core/ResourceFlowSystem.js';
+import { getShelfSlots, stockShelf, removeFromShelf, PRODUCT_PRICES, buyResource, getDailyBuyLimit, setPromotionLevel, startCampaign, PROMOTION_LEVELS, CAMPAIGN_TEMPLATES, getPromotionBonus } from '../core/TradeSystem.js';
+import { getInventoryEntry, getInventoryQuantity } from '../core/ProductionSystem.js';
+import { getQuality, PRODUCTION_RECIPES } from '../data/production.js';
 
 export function openBuildingManagementPanel() {
   const container = createElement('div', { className: 'building-management-panel' });
@@ -57,12 +60,26 @@ export function openBuildingManagementPanel() {
       card.appendChild(info);
 
       if (entry.upgradeCost) {
-        const costText = Object.entries(entry.upgradeCost)
-          .map(([resource, amount]) => `${RESOURCES[resource]?.name || resource} ${formatNumber(amount)}`)
-          .join(' · ');
+        const products = entry.upgradeCost._products;
+        const resourceCost = Object.fromEntries(
+          Object.entries(entry.upgradeCost).filter(([k]) => k !== '_products'),
+        );
+        const costParts = Object.entries(resourceCost)
+          .map(([resource, amount]) => `${RESOURCES[resource]?.name || resource} ${formatNumber(amount)}`);
+        if (products) {
+          for (const [productId, amount] of Object.entries(products)) {
+            const recipe = PRODUCTION_RECIPES.find(r => r.id === productId);
+            costParts.push(`${recipe?.name || productId} ×${amount}`);
+          }
+        }
+        const costText = costParts.join(' · ');
+        const canAffordResources = gameState.canAfford(resourceCost);
+        const canAffordProducts = !products || Object.entries(products).every(
+          ([pid, amt]) => getInventoryQuantity(pid) >= amt,
+        );
         const button = createElement('button', {
           className: 'btn btn-primary',
-          disabled: !entry.operation.operational || !gameState.canAfford(entry.upgradeCost),
+          disabled: !entry.operation.operational || !canAffordResources || !canAffordProducts,
           title: `升级消耗：${costText}`,
         }, [lucideIcon('arrow-up-circle', 14), document.createTextNode(` 升级 ${costText}`)]);
         button.addEventListener('click', () => {
@@ -76,6 +93,126 @@ export function openBuildingManagementPanel() {
       } else if (entry.level >= 3) {
         card.appendChild(createElement('span', { className: 'managed-building-max' }, ['已满级']));
       }
+
+      // ===== 货架系统 =====
+      const shelfSlots = getShelfSlots(entry.building.buildingId);
+      if (shelfSlots > 0 && entry.operation.operational) {
+        const shelfSection = createElement('div', { className: 'building-shelf-section' });
+        shelfSection.appendChild(createElement('div', { className: 'shelf-header' }, [
+          lucideIcon('shopping-bag', 14),
+          document.createTextNode(` 货架 (${(entry.building.shopShelf || []).length}/${shelfSlots})`),
+        ]));
+
+        // 显示已上架商品
+        for (const item of (entry.building.shopShelf || [])) {
+          const recipe = PRODUCTION_RECIPES.find(r => r.id === item.productId);
+          const quality = getQuality(item.qualityScore);
+          const row = createElement('div', { className: 'shelf-item' }, [
+            createElement('span', {}, [`${recipe?.name || item.productId} [${quality.grade}] × ${item.stock}`]),
+          ]);
+          const removeBtn = createElement('button', { className: 'btn btn-sm' }, ['下架']);
+          removeBtn.addEventListener('click', () => { removeFromShelf(entry.building, item.productId); render(); });
+          row.appendChild(removeBtn);
+          shelfSection.appendChild(row);
+        }
+
+        // 上架按钮
+        if ((entry.building.shopShelf || []).length < shelfSlots) {
+          const sellableProducts = Object.keys(PRODUCT_PRICES).filter(pid => {
+            const inv = getInventoryEntry(pid);
+            return inv && inv.quantity > 0 && !(entry.building.shopShelf || []).some(s => s.productId === pid);
+          });
+          if (sellableProducts.length > 0) {
+            const select = createElement('select', { className: 'shelf-select' });
+            select.appendChild(createElement('option', { value: '' }, ['选择商品...']));
+            for (const pid of sellableProducts) {
+              const recipe = PRODUCTION_RECIPES.find(r => r.id === pid);
+              const inv = getInventoryEntry(pid);
+              select.appendChild(createElement('option', { value: pid }, [`${recipe?.name || pid} (库存${inv.quantity})`]));
+            }
+            const qtyInput = createElement('input', { type: 'number', className: 'shelf-qty', min: 1, value: 1, placeholder: '数量' });
+            const addBtn = createElement('button', { className: 'btn btn-primary btn-sm' }, ['上架']);
+            addBtn.addEventListener('click', () => {
+              const pid = select.value;
+              const qty = parseInt(qtyInput.value) || 1;
+              if (!pid) return;
+              const result = stockShelf(entry.building, pid, qty);
+              if (!result.ok) gameState.addNotification({ title: '上架失败', text: result.reason, type: 'warning', icon: 'alert-triangle' });
+              render();
+            });
+            const addRow = createElement('div', { className: 'shelf-add-row' }, [select, qtyInput, addBtn]);
+            shelfSection.appendChild(addRow);
+          }
+        }
+        card.appendChild(shelfSection);
+      }
+
+      // ===== 贸易站特殊功能：采购 + 宣传 =====
+      if (entry.building.buildingId === 'trade_hub' && entry.operation.operational) {
+        const tradeSection = createElement('div', { className: 'trade-hub-section' });
+        tradeSection.appendChild(createElement('h4', {}, [lucideIcon('arrow-left-right', 14), document.createTextNode(' 贸易站功能')]));
+
+        // 采购资源
+        const buySection = createElement('div', { className: 'trade-buy-section' });
+        buySection.appendChild(createElement('div', { className: 'trade-subtitle' }, [`采购资源 (今日上限: ${getDailyBuyLimit()}单位)`]));
+        for (const [res, price] of Object.entries({ metal: 3, crystal: 8, energy: 2, food: 2 })) {
+          const row = createElement('div', { className: 'trade-buy-row' });
+          row.appendChild(createElement('span', {}, [`${RESOURCES[res].name} — ${price}星币/单位`]));
+          const qtyInput = createElement('input', { type: 'number', className: 'trade-qty', min: 1, value: 5 });
+          const buyBtn = createElement('button', { className: 'btn btn-sm' }, ['购买']);
+          buyBtn.addEventListener('click', () => {
+            const qty = parseInt(qtyInput.value) || 5;
+            const result = buyResource(res, qty);
+            if (result.ok) {
+              gameState.addNotification({ title: '采购成功', text: `购入 ${result.bought} ${RESOURCES[res].name}，花费 ${result.cost} 星币`, type: 'success', icon: 'coins' });
+            } else {
+              gameState.addNotification({ title: '采购失败', text: result.reason, type: 'warning', icon: 'alert-triangle' });
+            }
+            render();
+          });
+          row.appendChild(qtyInput);
+          row.appendChild(buyBtn);
+          buySection.appendChild(row);
+        }
+        tradeSection.appendChild(buySection);
+
+        // 宣传引流
+        const promoSection = createElement('div', { className: 'trade-promo-section' });
+        promoSection.appendChild(createElement('div', { className: 'trade-subtitle' }, [`宣传引流 (当前加成: +${Math.round(getPromotionBonus() * 100)}%)`]));
+
+        // 持续投入
+        const promoSelect = createElement('select', { className: 'promo-select' });
+        for (const p of PROMOTION_LEVELS) {
+          const opt = createElement('option', { value: p.level, selected: p.level === (gameState.state.trade?.promotionLevel || 0) },
+            [`${p.label}${p.cost ? ` (${p.cost}星币/天, +${Math.round(p.bonus * 100)}%)` : ''}`]);
+          promoSelect.appendChild(opt);
+        }
+        promoSelect.addEventListener('change', () => { setPromotionLevel(parseInt(promoSelect.value)); render(); });
+        promoSection.appendChild(createElement('div', { className: 'promo-row' }, [
+          createElement('span', {}, ['持续投入：']), promoSelect,
+        ]));
+
+        // 临时活动
+        const campaign = gameState.state.trade?.campaign;
+        if (campaign) {
+          const remaining = campaign.duration - (gameState.state.day - campaign.startDay);
+          promoSection.appendChild(createElement('div', { className: 'campaign-active' }, [
+            `${campaign.label}进行中 — 剩余${remaining}天，游客+${Math.round(campaign.bonus * 100)}%`,
+          ]));
+        } else {
+          for (const tpl of CAMPAIGN_TEMPLATES) {
+            const btn = createElement('button', {
+              className: 'btn btn-sm',
+              disabled: !gameState.canAfford({ credits: tpl.cost }),
+            }, [`${tpl.label} (${tpl.cost}星币, ${tpl.duration}天, +${Math.round(tpl.bonus * 100)}%)`]);
+            btn.addEventListener('click', () => { startCampaign(tpl.type); render(); });
+            promoSection.appendChild(btn);
+          }
+        }
+        tradeSection.appendChild(promoSection);
+        card.appendChild(tradeSection);
+      }
+
       list.appendChild(card);
     }
     container.appendChild(list);
@@ -85,6 +222,8 @@ export function openBuildingManagementPanel() {
     bus.on('building:placed', render),
     bus.on('building:upgraded', render),
     bus.on('resource:change', render),
+    bus.on('trade:shelf-updated', render),
+    bus.on('trade:product-sold', render),
   ];
   render();
   const content = ui.createModalContent('设施管理', 'building-2', container);

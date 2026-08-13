@@ -10,7 +10,10 @@ export function isWalkable(map, x, y) {
   if (y < 0 || y >= map.length || x < 0 || x >= map[0].length) return false;
   const tile = map[y][x];
   if (!tile.explored) return false;
-  if (tile.type === 'water' || tile.type === 'mountain') return false;
+  if (tile.type === 'water' || tile.type === 'mountain') {
+    // 有建筑的山/水格子允许通行（科技解锁后建造的设施提供通行基础设施）
+    return !!tile.building;
+  }
   return true;
 }
 

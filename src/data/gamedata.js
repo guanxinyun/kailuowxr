@@ -162,8 +162,8 @@ export const EVENTS = [
 // ===== 地图瓦片类型 =====
 export const TILE_TYPES = {
   plains:    { name: '平原',   color: '#1a2a1a', buildable: true,  icon: null },
-  mountain:  { name: '山脉',   color: '#2a2a3a', buildable: false, icon: 'mountain' },
-  water:     { name: '液态湖', color: '#0a1a3a', buildable: false, icon: 'droplets' },
+  mountain:  { name: '山脉',   color: '#2a2a3a', buildable: false, icon: 'mountain', techUnlock: 'mountain_engineering' },
+  water:     { name: '液态湖', color: '#0a1a3a', buildable: false, icon: 'droplets', techUnlock: 'water_engineering' },
   crystal:   { name: '晶矿',   color: '#2a1a3a', buildable: true,  icon: 'gem', resource: 'crystal' },
   metal:     { name: '矿脉',   color: '#2a2a2a', buildable: true,  icon: 'pickaxe', resource: 'metal' },
   ruins:     { name: '遗迹',   color: '#1a1a2a', buildable: false, icon: 'landmark', explorable: true },
@@ -171,6 +171,15 @@ export const TILE_TYPES = {
   forest:    { name: '异星林', color: '#0a2a1a', buildable: true,  icon: 'trees', resource: 'nature' },
   snow:      { name: '寒霜原', color: '#b8d8e8', buildable: true,  icon: 'snowflake', resource: 'ice_core' },
   desert:    { name: '赤沙地', color: '#b87a38', buildable: true,  icon: 'sun', resource: 'sun_crystal' },
+};
+
+/** 地形产出加成：特定建筑在特定地形上的产出乘数 */
+export const TERRAIN_BONUSES = {
+  mountain: { mine: 1.5, observatory: 1.4, radar: 1.3 },
+  water:    { hydro_farm: 1.4, algae_reactor: 1.5, solar_panel: 1.2 },
+  crystal:  { crystal_extractor: 1.4 },
+  metal:    { mine: 1.3 },
+  forest:   { greenhouse: 1.3, hydro_farm: 1.2 },
 };
 
 // ===== 引力维度配置 =====

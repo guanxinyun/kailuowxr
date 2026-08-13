@@ -59,6 +59,32 @@ export const TECHS = [
 
   // Tier 2
   {
+    id: 'mountain_engineering',
+    name: '山地工程',
+    tier: 2,
+    icon: 'mountain',
+    desc: '开发在山脉地形上建造设施的工程技术。',
+    flavor: '征服高峰，不是为了俯瞰，而是为了扎根。',
+    cost: { research: 45 },
+    prereqs: ['shields'],
+    unlocks: [],
+    gravity: { adventure: 3, knowledge: 2 },
+    position: { x: 600, y: 240 },
+  },
+  {
+    id: 'water_engineering',
+    name: '水域工程',
+    tier: 2,
+    icon: 'droplets',
+    desc: '开发在液态湖上建造浮动设施的工程技术。',
+    flavor: '水面之上，是另一片大陆。',
+    cost: { research: 45 },
+    prereqs: ['biotech_1'],
+    unlocks: [],
+    gravity: { nature: 3, knowledge: 2 },
+    position: { x: 0, y: 240 },
+  },
+  {
     id: 'ecology',
     name: '生态工程',
     tier: 2,

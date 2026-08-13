@@ -2,8 +2,16 @@ import { bus } from './EventBus.js';
 import { gameState } from './GameState.js';
 import { getBuildingById } from '../data/buildings.js';
 import { isConnectedToHQ } from './Pathfinding.js';
+import { getInventoryQuantity, addInventory } from './ProductionSystem.js';
 
 const MAX_LEVEL = 3;
+
+/** 3级升级所需加工品（按建筑类别） */
+const UPGRADE_PRODUCTS = {
+  science: { crystal_circuit: 1 },
+  culture: { star_souvenir: 1 },
+  _default: { alloy: 1 },
+};
 
 export function getBuildingLevel(building) {
   return Math.max(1, building.level || 1);
@@ -24,15 +32,28 @@ export function getBuildingOperationalState(building) {
   return connected ? { operational: true, reason: '' } : { operational: false, reason: '未通过道路连接降落点' };
 }
 
+/** 升级到2级 +30星币，升级到3级 +80星币 */
+const UPGRADE_CREDITS = { 2: 30, 3: 80 };
+
 export function getUpgradeCost(building) {
   const data = getBuildingById(building.buildingId);
   const level = getBuildingLevel(building);
   if (!data || level >= MAX_LEVEL || building.buildingId === 'road' || building.buildingId === 'landing_pad') return null;
   const multiplier = 0.75 + level * 0.5;
   const sourceCost = Object.keys(data.cost).length ? data.cost : { metal: 20 };
-  return Object.fromEntries(
+  const cost = Object.fromEntries(
     Object.entries(sourceCost).map(([resource, amount]) => [resource, Math.max(1, Math.ceil(amount * multiplier))]),
   );
+  const nextLevel = level + 1;
+  if (UPGRADE_CREDITS[nextLevel]) cost.credits = UPGRADE_CREDITS[nextLevel];
+  // 3级升级需要加工品
+  const products = {};
+  if (nextLevel === 3) {
+    const category = data.category || 'basic';
+    const required = UPGRADE_PRODUCTS[category] || UPGRADE_PRODUCTS._default;
+    Object.assign(products, required);
+  }
+  return { ...cost, _products: Object.keys(products).length ? products : undefined };
 }
 
 export function upgradeBuilding(buildingId) {
@@ -42,7 +63,30 @@ export function upgradeBuilding(buildingId) {
   if (!operation.operational) return { ok: false, reason: operation.reason };
   const cost = getUpgradeCost(building);
   if (!cost) return { ok: false, reason: '该建筑无法继续升级' };
-  if (!gameState.spend(cost)) return { ok: false, reason: '升级资源不足' };
+
+  // 检查加工品库存
+  const products = cost._products;
+  if (products) {
+    for (const [productId, amount] of Object.entries(products)) {
+      if (getInventoryQuantity(productId) < amount) {
+        return { ok: false, reason: `加工品不足：需要 ${productId} ×${amount}` };
+      }
+    }
+  }
+
+  // 扣除基础资源和星币（排除 _products 字段）
+  const resourceCost = Object.fromEntries(
+    Object.entries(cost).filter(([k]) => k !== '_products'),
+  );
+  if (!gameState.spend(resourceCost)) return { ok: false, reason: '升级资源不足' };
+
+  // 扣除加工品
+  if (products) {
+    for (const [productId, amount] of Object.entries(products)) {
+      addInventory(productId, -amount);
+    }
+  }
+
   building.level = getBuildingLevel(building) + 1;
   bus.emit('building:upgraded', { building, cost });
   gameState.addNotification({

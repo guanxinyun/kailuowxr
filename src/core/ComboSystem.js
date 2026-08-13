@@ -20,11 +20,14 @@ function findActiveInstance(combo) {
   );
   if (candidates.some((group) => group.length === 0)) return null;
 
+  // 贪心搜索：从第一组开始，逐步匹配后续组，确保不重复选择同一建筑
   for (const first of candidates[0]) {
     const selected = [first];
+    const usedIds = new Set([first.id]);
     let valid = true;
     for (let index = 1; index < candidates.length; index++) {
       const match = candidates[index].find((building) =>
+        !usedIds.has(building.id) &&
         selected.every((chosen) => distance(chosen, building) <= combo.maxDistance)
       );
       if (!match) {
@@ -32,6 +35,7 @@ function findActiveInstance(combo) {
         break;
       }
       selected.push(match);
+      usedIds.add(match.id);
     }
     if (valid) return selected.map((building) => building.id);
   }

@@ -247,8 +247,20 @@ class GameState {
         inventory: {},
         queue: [],
         completed: 0,
+        autoQueue: [],
         ...(loaded.production || {}),
       };
+      loaded.trade = {
+        dailyBought: {},
+        lastTradeDay: 0,
+        promotionLevel: 0,
+        campaign: null,
+        ...(loaded.trade || {}),
+      };
+      // 确保建筑有 shopShelf
+      for (const b of (loaded.buildings || [])) {
+        if (!b.shopShelf) b.shopShelf = undefined; // ensureTradeState 会处理
+      }
       loaded.combos = {
         active: [],
         discovered: [],

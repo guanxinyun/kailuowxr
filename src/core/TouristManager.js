@@ -13,6 +13,7 @@ import { getBuildingEfficiency, getBuildingOperationalState } from './BuildingSy
 import { getComboMultiplier } from './ComboSystem.js';
 import { aiClient } from '../ai/AIClient.js';
 import { buildTouristFacts, getNarrationFallback } from './AIContentFacts.js';
+import { touristBuyFromShelf, getPromotionBonus } from './TradeSystem.js';
 
 // 游客名字池（按种族）
 const TOURIST_NAMES = {
@@ -52,6 +53,10 @@ export function updateTouristSystem() {
 
   // 没有吸引力建筑，不会有游客
   if (tourismAttraction === 0) return;
+
+  // 宣传引流加成
+  const promotionBonus = getPromotionBonus();
+  tourismAttraction *= (1 + promotionBonus);
 
   // 每5-15天来一批游客，取决于吸引力
   const interval = Math.max(5, 20 - tourismAttraction);
@@ -227,6 +232,11 @@ export function processTouristSpending(tourists, buildings, routeSatisfaction = 
       remainingBudget -= spend;
       tourist.spent += spend;
       totalIncome += spend;
+
+      // 货架购买：游客尝试购买该建筑货架上的加工品
+      const shelfIncome = touristBuyFromShelf(shop, tourist);
+      totalIncome += shelfIncome;
+      remainingBudget = tourist.budget - tourist.spent;
     }
 
     const souvenir = getInventoryEntry('star_souvenir');
