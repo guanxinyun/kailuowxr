@@ -5,6 +5,7 @@ import { gameState } from '../core/GameState.js';
 import { ui } from '../core/UIManager.js';
 import { createElement, lucideIcon } from '../core/utils.js';
 import { TECHS, getTechById, getAvailableTechs } from '../data/techs.js';
+import { getBuildingById } from '../data/buildings.js';
 import { GRAVITY_CONFIG, RESOURCES } from '../data/gamedata.js';
 import { bus } from '../core/EventBus.js';
 
@@ -188,7 +189,7 @@ function showTechDetail(tech, container, event) {
     </div>` : ''}
     <div class="tech-detail-section">
       <div class="tech-detail-section-title">解锁</div>
-      <div class="tech-detail-unlocks">${tech.unlocks.join(', ')}</div>
+      <div class="tech-detail-unlocks">${tech.unlocks.map(u => { const b = getBuildingById(u); return b ? b.name : u; }).join('、')}</div>
     </div>
     <div class="tech-detail-flavor">${tech.flavor}</div>
   `;

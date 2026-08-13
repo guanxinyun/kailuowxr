@@ -8,6 +8,7 @@ import { aiAdvisor } from '../core/AIAdvisor.js';
 import { AI_REQUEST_TYPES } from '../ai/AIPrompts.js';
 import { createElement, lucideIcon, formatNumber, $ } from '../core/utils.js';
 import { BUILDINGS, BUILDING_CATEGORIES, getBuildingsByCategory } from '../data/buildings.js';
+import { getTechById } from '../data/techs.js';
 import { GRAVITY_CONFIG, RESOURCES } from '../data/gamedata.js';
 import { calculateBuildingDailyOutput, formatDailyRate } from '../core/ResourceFlowSystem.js';
 
@@ -103,7 +104,7 @@ export function openBuildPanel() {
       if (isLocked) {
         card.appendChild(createElement('div', { className: 'building-lock-info' }, [
           lucideIcon('lock', 12),
-          document.createTextNode(`需要科技: ${b.unlockTech}`),
+          document.createTextNode(`需要科技: ${getTechById(b.unlockTech)?.name || b.unlockTech}`),
         ]));
       }
 

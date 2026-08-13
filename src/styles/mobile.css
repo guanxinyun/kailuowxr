@@ -1,0 +1,350 @@
+/* ============================================
+   星尘殖民地 — 手机端响应式适配
+   ============================================ */
+
+/* ========== 竖屏手机 (≤ 768px) ========== */
+@media (max-width: 768px) {
+
+  /* ---- 根变量覆盖 ---- */
+  :root {
+    --topbar-height: 40px;
+    --toolpanel-width: 0px;
+    --bottombar-height: 0px;
+    --sidepanel-width: 100vw;
+  }
+
+  /* ---- 主布局：去掉左侧工具栏行，画布占满 ---- */
+  .game-layout {
+    grid-template-rows: var(--topbar-height) 1fr 52px;
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "topbar"
+      "main"
+      "toolpanel";
+  }
+
+  /* ---- 顶栏精简 ---- */
+  .top-bar {
+    padding: 0 var(--sp-2);
+    height: var(--topbar-height);
+  }
+  .topbar-left,
+  .topbar-center,
+  .topbar-right {
+    gap: var(--sp-1);
+  }
+  /* 隐藏 logo 文字，只留图标 */
+  .logo-text { display: none; }
+  .game-logo {
+    margin-right: var(--sp-1);
+    padding-right: var(--sp-1);
+  }
+  .logo-icon svg { width: 16px; height: 16px; }
+
+  /* 资源徽章紧凑 */
+  .topbar-resources {
+    gap: 1px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .topbar-resources::-webkit-scrollbar { display: none; }
+  .resource-badge {
+    padding: 1px var(--sp-1);
+    gap: 2px;
+  }
+  .resource-badge svg { width: 12px; height: 12px; }
+  .resource-value { font-size: 11px; min-width: 20px; }
+
+  /* 日期精简 */
+  .date-display { gap: var(--sp-1); }
+  .season-indicator { font-size: 10px; padding: 0 var(--sp-1); }
+  .date-text { font-size: 11px; }
+
+  /* 速度按钮缩小 */
+  .speed-btn { width: 24px; height: 22px; }
+  .speed-btn svg { width: 12px; height: 12px; }
+
+  /* 人口 */
+  .pop-display {
+    padding-left: var(--sp-1);
+    font-size: 11px;
+  }
+  .pop-icon svg { width: 12px; height: 12px; }
+
+  /* ---- 工具栏改底部横排 ---- */
+  .tool-panel {
+    grid-area: toolpanel;
+    flex-direction: row;
+    padding: 0 var(--sp-2);
+    gap: 0;
+    border-right: none;
+    border-top: 1px solid var(--border-subtle);
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    justify-content: center;
+    align-items: center;
+  }
+  .tool-panel::-webkit-scrollbar { display: none; }
+  .tool-panel::after { display: none; }
+
+  .tool-buttons {
+    flex-direction: row;
+    gap: 2px;
+    align-items: center;
+  }
+  .tool-btn {
+    width: 40px; height: 40px;
+  }
+  .tool-btn svg { width: 18px; height: 18px; }
+  /* 隐藏 hover 标签（手机无 hover） */
+  .tool-btn-label { display: none; }
+  /* 活跃指示条改为底部 */
+  .tool-btn.active::before {
+    left: 25%; right: 25%;
+    top: auto; bottom: -1px;
+    width: auto; height: 3px;
+    border-radius: 2px 2px 0 0;
+  }
+
+  /* 分隔线改竖向 */
+  .tool-separator {
+    width: 1px;
+    height: 28px;
+    margin: 0 var(--sp-1);
+    background: linear-gradient(180deg, transparent, var(--border-subtle), transparent);
+  }
+
+  /* 引力切换按钮保持 2 列但更紧凑 */
+  .gravity-toggles {
+    gap: 2px;
+    padding: 0 var(--sp-1);
+  }
+  .gravity-toggle { width: 22px; height: 22px; }
+  .gravity-toggle svg { width: 11px; height: 11px; }
+
+  /* ---- 隐藏底部消息栏（工具栏已占据底部） ---- */
+  .bottom-bar { display: none; }
+
+  /* ---- 画布占满 ---- */
+  .canvas-container {
+    grid-area: main;
+  }
+
+  /* ---- 右侧面板全屏覆盖 ---- */
+  .side-panel {
+    top: var(--topbar-height);
+    bottom: 52px;
+    width: 100vw;
+  }
+
+  /* ---- 模态框全屏 ---- */
+  .modal-overlay {
+    padding: 0;
+    align-items: stretch;
+  }
+  .modal {
+    max-height: 100vh;
+    max-height: 100dvh;
+    border-radius: 0;
+    width: 100vw !important;
+    max-width: 100vw !important;
+  }
+  .modal-lg,
+  .modal-xl {
+    height: 100vh;
+    height: 100dvh;
+  }
+  .modal-md,
+  .modal-sm {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    margin: auto 0;
+    border-radius: var(--radius-lg);
+  }
+
+  .modal-header {
+    padding: var(--sp-3) var(--sp-4);
+  }
+  .modal-header h2 { font-size: var(--fs-lg); }
+  .modal-body {
+    padding: var(--sp-3) var(--sp-4);
+  }
+  .modal-footer {
+    padding: var(--sp-2) var(--sp-4);
+  }
+
+  /* ---- 建造面板适配 ---- */
+  .build-grid {
+    grid-template-columns: 1fr;
+    padding: var(--sp-3);
+    gap: var(--sp-3);
+  }
+  .building-card {
+    padding: var(--sp-3);
+  }
+  /* 手机上始终显示引力条 */
+  .building-gravity {
+    opacity: 1;
+    max-height: 80px;
+    margin-top: var(--sp-1);
+  }
+  .build-preview {
+    padding: var(--sp-3) var(--sp-4);
+  }
+
+  /* ---- 科技树适配 ---- */
+  .tech-tree-container {
+    overflow-x: auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tech-detail-card {
+    position: fixed !important;
+    left: var(--sp-3) !important;
+    right: var(--sp-3) !important;
+    bottom: var(--sp-3) !important;
+    top: auto !important;
+    width: auto !important;
+    max-width: none !important;
+    z-index: 10;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+  }
+
+  /* ---- 通知缩窄 ---- */
+  .notification-container {
+    right: var(--sp-2);
+    left: var(--sp-2);
+    max-width: none;
+  }
+  .notification-card {
+    min-width: 0;
+  }
+
+  /* ---- 事件弹窗 ---- */
+  .event-modal {
+    width: 100vw;
+    max-width: 100vw;
+  }
+
+  /* ---- 确认对话框 ---- */
+  .confirm-dialog {
+    padding: var(--sp-4);
+  }
+
+  /* ---- 标签页横向滚动 ---- */
+  .tab-group {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .tab-group::-webkit-scrollbar { display: none; }
+
+  /* ---- AI 内容面板 ---- */
+  .ai-content-actions {
+    flex-wrap: wrap;
+  }
+  .ai-content-actions .btn {
+    flex: 1 1 45%;
+    min-width: 0;
+    font-size: var(--fs-sm);
+    padding: var(--sp-2) var(--sp-3);
+  }
+  .ai-config-box input {
+    font-size: 16px; /* 防止 iOS 自动缩放 */
+  }
+  .ai-instruction {
+    font-size: 16px; /* 防止 iOS 自动缩放 */
+  }
+
+  /* ---- 居民面板 ---- */
+  .resident-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* ---- 外交面板 ---- */
+  .species-card-body {
+    grid-template-columns: 1fr;
+  }
+
+  /* ---- 探索面板 ---- */
+  .explore-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* ---- 存档面板 ---- */
+  .save-slots {
+    grid-template-columns: 1fr;
+  }
+
+  /* ---- 年度评审 ---- */
+  .review-categories {
+    grid-template-columns: 1fr;
+  }
+
+  /* ---- 生产面板 ---- */
+  .production-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ========== 极小屏幕 (≤ 480px) ========== */
+@media (max-width: 480px) {
+  /* 顶栏进一步精简 */
+  .topbar-center { display: none; }
+  .topbar-left { flex: 1; }
+  .topbar-right { flex: 0 0 auto; }
+
+  /* 工具按钮更小 */
+  .tool-btn { width: 36px; height: 36px; }
+  .tool-btn svg { width: 16px; height: 16px; }
+  .gravity-toggle { width: 20px; height: 20px; }
+  .gravity-toggle svg { width: 10px; height: 10px; }
+
+  /* 建筑图标缩小 */
+  .building-icon { width: 40px; height: 40px; }
+  .building-icon svg { width: 20px; height: 20px; }
+  .building-name { font-size: var(--fs-md); }
+}
+
+/* ========== 横屏手机 ========== */
+@media (max-height: 500px) and (orientation: landscape) {
+  :root {
+    --topbar-height: 36px;
+  }
+  .game-layout {
+    grid-template-rows: var(--topbar-height) 1fr;
+    grid-template-columns: 48px 1fr;
+    grid-template-areas:
+      "topbar topbar"
+      "toolpanel main";
+  }
+  /* 横屏恢复左侧工具栏 */
+  .tool-panel {
+    flex-direction: column;
+    border-top: none;
+    border-right: 1px solid var(--border-subtle);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: var(--sp-1) 0;
+  }
+  .tool-buttons {
+    flex-direction: column;
+  }
+  .tool-separator {
+    width: 28px; height: 1px;
+    margin: var(--sp-1) 0;
+  }
+  .tool-btn { width: 36px; height: 36px; }
+  .bottom-bar { display: none; }
+  .side-panel {
+    bottom: 0;
+  }
+  .modal {
+    max-height: 100vh;
+    max-height: 100dvh;
+  }
+}

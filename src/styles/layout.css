@@ -89,6 +89,7 @@
   width: 100%;
   height: 100%;
   image-rendering: pixelated;
+  touch-action: none; /* 防止浏览器默认触控行为 */
 }
 #canvas-terrain { z-index: 1; }
 #canvas-dynamic { z-index: 2; }

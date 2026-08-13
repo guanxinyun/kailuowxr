@@ -134,7 +134,21 @@ export class CanvasRenderer {
   _setupEvents() {
     const canvas = this.dynamicCanvas;
 
+    // ---- 双指缩放状态 ----
+    let pinchStartDist = 0;
+    let pinchStartZoom = 1;
+    const activePointers = new Map();
+
     canvas.addEventListener('pointerdown', (e) => {
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (activePointers.size === 2) {
+        // 进入双指模式
+        const pts = [...activePointers.values()];
+        pinchStartDist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+        pinchStartZoom = this.camera.zoom;
+        this.isDragging = false;
+        return;
+      }
       if (e.button !== 0) return;          // 只响应左键
       this.isDragging = true;
       this.dragStart = { x: e.clientX - this.camera.x, y: e.clientY - this.camera.y };
@@ -142,6 +156,26 @@ export class CanvasRenderer {
     });
 
     canvas.addEventListener('pointermove', (e) => {
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (activePointers.size >= 2) {
+        // 双指缩放
+        const pts = [...activePointers.values()];
+        const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+        if (pinchStartDist > 0) {
+          const oldZoom = this.camera.zoom;
+          this.camera.zoom = clamp(pinchStartZoom * (dist / pinchStartDist), 0.3, 3);
+          const rect = canvas.getBoundingClientRect();
+          const mx = (pts[0].x + pts[1].x) / 2 - rect.left;
+          const my = (pts[0].y + pts[1].y) / 2 - rect.top;
+          const scale = this.camera.zoom / oldZoom;
+          this.camera.x = mx - (mx - this.camera.x) * scale;
+          this.camera.y = my - (my - this.camera.y) * scale;
+          this._terrainDirty = true;
+          this._dynamicDirty = true;
+          this._heatmapDirty = true;
+        }
+        return;
+      }
       this.lastMouse = { x: e.clientX, y: e.clientY };
       if (this.isDragging) {
         this.camera.x = e.clientX - this.dragStart.x;
@@ -155,6 +189,13 @@ export class CanvasRenderer {
     });
 
     canvas.addEventListener('pointerup', (e) => {
+      const wasPinching = activePointers.size >= 2;
+      activePointers.delete(e.pointerId);
+      if (wasPinching) {
+        pinchStartDist = 0;
+        this.isDragging = false;
+        return;
+      }
       if (e.button !== 0) return;           // 只响应左键
       if (this.isDragging) {
         const dx = Math.abs(e.clientX - (this.dragStart.x + this.camera.x));
@@ -163,6 +204,12 @@ export class CanvasRenderer {
           this._handleClick(e);
         }
       }
+      this.isDragging = false;
+    });
+
+    canvas.addEventListener('pointercancel', (e) => {
+      activePointers.delete(e.pointerId);
+      if (activePointers.size < 2) pinchStartDist = 0;
       this.isDragging = false;
     });
 
