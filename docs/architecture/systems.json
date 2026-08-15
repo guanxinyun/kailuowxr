@@ -33,13 +33,15 @@
       "id": "rendering",
       "name": "Canvas 渲染与精灵",
       "status": "implemented",
-      "summary": "绘制等距地形、建筑、热力图、居民和游客，并处理地图输入。自定义纹理：地形和道路等距投影+菱形clip平铺，建筑分面拼合（正面/顶面/侧面仿射变换）。",
+      "summary": "绘制等距地形、建筑、热力图、居民和游客，并处理地图输入。自定义纹理：地形和道路等距投影+菱形clip平铺；建筑支持分面拼合等距图和完整图按比例缩放、底边中心锚定；居民/游客支持按方向分片拼合3×4精灵表，并按32×32单帧脚底中心绘制。",
       "owns": ["Canvas 图层", "显示精灵和相机"],
-      "files": ["src/core/CanvasRenderer.js", "src/core/ResidentSprites.js", "src/panels/TextureCropModal.js", "src/panels/BuildingFaceModal.js"],
+      "files": ["src/core/CanvasRenderer.js", "src/core/ResidentSprites.js", "src/core/TexturePresentation.js", "src/panels/TextureCropModal.js", "src/panels/BuildingFaceModal.js", "src/panels/SpriteFaceModal.js"],
       "callers": ["src/main.js", "src/core/TouristManager.js"],
       "exports": [
         {"file": "src/core/CanvasRenderer.js", "names": ["CanvasRenderer"]},
-        {"file": "src/core/ResidentSprites.js", "names": ["ALIEN_COLORS", "ResidentSprite", "ResidentSpriteManager"]}
+        {"file": "src/core/ResidentSprites.js", "names": ["ALIEN_COLORS", "ResidentSprite", "ResidentSpriteManager"]},
+        {"file": "src/core/TexturePresentation.js", "names": ["SPRITE_FRAME_SIZE", "containRect", "drawCheckerboard", "drawContainedImage", "getBottomCenterDrawPosition", "getBuildingDrawPosition", "getFullImageDrawRect", "getFullImageFrame", "getSpriteDrawRect"]},
+        {"file": "src/panels/SpriteFaceModal.js", "names": ["openSpriteFaceModal"]}
       ],
       "events": ["building:placed", "tourist:arrived", "tourist:leaving", "tile:hover", "tile:click", "building:place", "map:expanded", "map:revealed"],
       "designRefs": ["设计总纲.txt#七、美术与音效方向"]
@@ -150,9 +152,9 @@
       "id": "ai-narrative",
       "name": "AI 叙事与本地降级",
       "status": "fallback-only",
-      "summary": "统一请求队列目前只生成本地模板文本；没有真实 API、提供商或密钥配置。AI 不拥有玩法状态。",
+      "summary": "统一请求队列支持玩家自填 OpenAI 兼容接口生成叙事，并在未配置、离线或连续失败时使用本地模板；AI 不拥有玩法状态。",
       "owns": ["叙事请求队列", "临时文本缓存", "fallback 文本"],
-      "files": ["src/core/AIAdvisor.js", "src/ai/AIRequestQueue.js", "src/ai/AIPrompts.js", "src/ai/AISchemas.js", "src/ai/AIFallbacks.js"],
+      "files": ["src/core/AIAdvisor.js", "src/ai/AIClient.js", "src/ai/AIRequestQueue.js", "src/ai/AIPrompts.js", "src/ai/AISchemas.js", "src/ai/AIFallbacks.js"],
       "callers": ["src/main.js", "src/panels/BuildPanel.js", "src/panels/ResidentPanel.js", "src/panels/DiplomacyPanel.js", "src/panels/EventModal.js", "src/panels/AnnualPanel.js"],
       "exports": [
         {"file": "src/core/AIAdvisor.js", "names": ["aiAdvisor"]},
@@ -179,12 +181,12 @@
       "id": "dynamic-ai-content",
       "name": "运行时 AI 动态内容",
       "status": "implemented",
-      "summary": "通过玩家自己的 OpenAI 兼容 HTTP/HTTPS 接口或本地降级，在游玩中生成建筑、组合评价和外星种族；规则经本地校验并由玩家确认。",
-      "owns": ["state.aiContent", "当前存档动态建筑/组合/种族"],
+      "summary": "通过玩家自己的 OpenAI 兼容 HTTP/HTTPS 接口或本地降级，在游玩中生成建筑、组合评价、外星种族和新科技；模型列表支持分页，规则经本地校验并由玩家确认。",
+      "owns": ["state.aiContent", "当前存档动态建筑/组合/种族/科技"],
       "files": ["src/ai/AIClient.js", "src/core/AIContentFacts.js", "src/core/AITriggerSystem.js", "src/core/DynamicContentSystem.js", "src/panels/AIContentPanel.js"],
       "callers": ["src/main.js"],
       "exports": [
-        {"file":"src/ai/AIClient.js","names":["aiClient"]},
+        {"file":"src/ai/AIClient.js","names":["aiClient","getModelsEndpoint","getModelsPageEndpoint","normalizeModelList"]},
         {"file":"src/core/AIContentFacts.js","names":["buildProductFacts","buildTouristFacts","buildExplorationFacts","buildDiaryFacts","buildAnnualFacts","getNarrationFallback"]},
         {"file":"src/core/AITriggerSystem.js","names":["createAITriggerState","recordMilestone","updateShortages","canCreateProposal","markTriggered"]},
         {"file":"src/core/DynamicContentSystem.js","names":["validateBuildingProposal","validateComboProposal","validateSpeciesProposal","generateProposal","acceptProposal","rejectProposal","restoreDynamicContent","updateDynamicContent","generateComboComment","handleAIContentMilestone"]},
@@ -212,9 +214,9 @@
       "id": "ui-panels",
       "name": "DOM 界面与面板",
       "status": "implemented",
-      "summary": "管理模态框、通知、顶栏、教程和功能面板。面板应调用系统接口而非拥有规则。",
+      "summary": "管理模态框、通知、顶栏、教程和功能面板；支持建筑完整图按比例裁剪、居民/游客四方向精灵表拼合、自动加工管理和 AI 接口配置。面板应调用系统接口而非拥有规则。",
       "owns": ["DOM 与交互临时状态"],
-      "files": ["src/core/UIManager.js", "src/core/TutorialManager.js", "src/panels/BuildPanel.js", "src/panels/TechPanel.js", "src/panels/ResidentPanel.js", "src/panels/DiplomacyPanel.js", "src/panels/AnnualPanel.js", "src/panels/EventModal.js", "src/panels/UtilityPanels.js"],
+      "files": ["src/core/UIManager.js", "src/core/TutorialManager.js", "src/panels/BuildPanel.js", "src/panels/TechPanel.js", "src/panels/ResidentPanel.js", "src/panels/DiplomacyPanel.js", "src/panels/AnnualPanel.js", "src/panels/EventModal.js", "src/panels/UtilityPanels.js", "src/panels/BuildingManagementPanel.js", "src/panels/AIContentPanel.js", "src/panels/TextureCropModal.js", "src/panels/SpriteFaceModal.js"],
       "callers": ["src/main.js"],
       "exports": [
         {"file": "src/core/UIManager.js", "names": ["UIManager", "ui"]},
