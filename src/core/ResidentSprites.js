@@ -8,6 +8,7 @@ import { gridToIso } from './MapGenerator.js';
 import { clamp } from './utils.js';
 import { findPath, isWalkable, hasRoad } from './Pathfinding.js';
 import { textureManager } from './TextureManager.js';
+import { getSpriteDrawRect } from './TexturePresentation.js';
 
 const TILE_W = 64;
 const TILE_H = 32;
@@ -560,15 +561,14 @@ export class ResidentSprite {
     const directionIndex = Math.max(0, DIRECTIONS.indexOf(this.direction));
     const sourceX = Math.min(2, this.frame) * frameWidth;
     const sourceY = directionIndex * frameHeight;
-    const drawWidth = frameWidth * scale;
-    const drawHeight = frameHeight * scale;
+    const drawRect = getSpriteDrawRect(x, y, scale);
 
     ctx.save();
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(
       image,
       sourceX, sourceY, frameWidth, frameHeight,
-      x - drawWidth / 2, y - drawHeight + 2 * scale, drawWidth, drawHeight,
+      drawRect.x, drawRect.y, drawRect.width, drawRect.height,
     );
     ctx.restore();
   }

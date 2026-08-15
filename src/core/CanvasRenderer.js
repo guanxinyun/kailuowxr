@@ -11,8 +11,10 @@ import { TILE_TYPES, GRAVITY_CONFIG } from '../data/gamedata.js';
 import { getBuildingById } from '../data/buildings.js';
 import { clamp, lucideIcon } from './utils.js';
 import { getBuildingOperationalState, requiresRoadConnection } from './BuildingSystem.js';
+import { getBuildingAutoProductionStatus } from './ProductionSystem.js';
 import { ResidentSpriteManager } from './ResidentSprites.js';
 import { textureManager } from './TextureManager.js';
+import { getBuildingDrawPosition } from './TexturePresentation.js';
 
 const TILE_W = 64;
 const TILE_H = 32;
@@ -68,6 +70,7 @@ export class CanvasRenderer {
 
     // 动画时间
     this._time = 0;
+    this._lastProcessingPhase = 0;
 
     this._setupEvents();
     this._resize();
@@ -303,6 +306,13 @@ export class CanvasRenderer {
 
     const loop = () => {
       this._time = performance.now();
+
+      // 建筑加工闪烁：检测相位变化，需要重绘地形层
+      const newPhase = Math.floor((this._time / 500) % 3);
+      if (newPhase !== this._lastProcessingPhase) {
+        this._lastProcessingPhase = newPhase;
+        this._terrainDirty = true;
+      }
 
       // 更新居民精灵（每帧都更新）
       this.spriteManager.update();
@@ -649,7 +659,13 @@ export class CanvasRenderer {
       if (customImage) {
         ctx.save();
         ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(customImage, x - customImage.width / 2, y + TILE_H / 2 - customImage.height);
+        const draw = getBuildingDrawPosition(
+          x,
+          y + TILE_H / 2,
+          customImage.width,
+          customImage.height,
+        );
+        ctx.drawImage(customImage, draw.x, draw.y, draw.width, draw.height);
         ctx.restore();
         return;
       }
@@ -763,8 +779,16 @@ export class CanvasRenderer {
     ctx.lineTo(x - hw * 0.5, y + hh * 0.5 - bh);
     ctx.stroke();
 
-    // 建筑名称
-    ctx.fillStyle = '#FFFFFF';
+    // 建筑名称（工作中时三状态闪烁变色）
+    const autoStatuses = getBuildingAutoProductionStatus(building);
+    const isProcessing = autoStatuses.some(s => s.enabled && s.active);
+    if (isProcessing) {
+      // 三状态循环：正常→亮→暗，每组 1.5 秒
+      const phase = Math.floor((this._time / 500) % 3);
+      ctx.fillStyle = phase === 0 ? '#FFFFFF' : phase === 1 ? '#80FF90' : '#40C060';
+    } else {
+      ctx.fillStyle = '#FFFFFF';
+    }
     ctx.font = 'bold 9px "Noto Sans SC"';
     ctx.textAlign = 'center';
     ctx.shadowColor = 'rgba(0,0,0,0.8)';

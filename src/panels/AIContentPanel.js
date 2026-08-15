@@ -14,20 +14,26 @@ export function openAIContentPanel() {
   let modelValue = initialConfig?.model || '';
   let apiKeyValue = '';
   let instructionValue = '';
+  let availableModels = [];
   const render = () => {
     container.replaceChildren();
     const state = gameState.state.aiContent;
     const status = aiClient.getStatus();
+    const statusLabels = { online: '在线模型', fallback: '本地降级', offline: '等待配置' };
+    const statusText = statusLabels[status.mode] || status.mode;
+    const errorHint = status.lastError ? ` · 最近错误: ${status.lastError}` : '';
+    const failureHint = status.failures > 0 ? ` · 失败${status.failures}/${3}次` : '';
     const toggle = createElement('input', { type: 'checkbox' });
     toggle.checked = state.enabled;
     toggle.addEventListener('change', () => { state.enabled = toggle.checked; render(); });
     container.appendChild(createElement('div', { className: 'ai-content-status' }, [
-      createElement('div', {}, [createElement('strong', {}, ['运行时 AI 内容']), createElement('span', {}, [`${status.mode === 'online' ? '在线模型' : '本地降级'} · 所有规则先校验再确认`])]),
+      createElement('div', {}, [createElement('strong', {}, ['运行时 AI 内容']), createElement('span', {}, [`${statusText}${failureHint}${errorHint} · 所有规则先校验再确认`])]),
       toggle,
     ]));
 
     const endpoint = createElement('input', { className: 'settings-pack-name', type: 'url', placeholder: 'OpenAI兼容接口，如 http://localhost:11434/v1/chat/completions', value: endpointValue });
-    const model = createElement('input', { className: 'settings-pack-name', type: 'text', placeholder: '模型名，如 qwen2.5:7b', value: modelValue });
+    const model = createElement('input', { className: 'settings-pack-name', type: 'text', placeholder: '模型名，如 qwen2.5:7b', value: modelValue, list: 'ai-model-list' });
+    const modelList = createElement('datalist', { id: 'ai-model-list' }, availableModels.map(id => createElement('option', { value: id })));
     const apiKey = createElement('input', { className: 'settings-pack-name', type: 'password', placeholder: initialConfig?.hasKey ? 'Key 已在当前标签页保存；留空保持不变' : 'API Key（本地模型可留空）', value: apiKeyValue });
     endpoint.addEventListener('input', () => { endpointValue = endpoint.value; });
     model.addEventListener('input', () => { modelValue = model.value; });
@@ -41,12 +47,37 @@ export function openAIContentPanel() {
         render();
       } catch (error) { gameState.addNotification({ title: 'AI配置无效', text: error.message, type: 'warning', icon: 'alert-triangle' }); }
     });
+    const fetchModels = createElement('button', { className: 'btn' }, ['自动获取模型']);
+    fetchModels.addEventListener('click', async () => {
+      fetchModels.disabled = true;
+      try {
+        availableModels = await aiClient.listModels({ endpoint: endpointValue, apiKey: apiKeyValue || undefined });
+        if (!availableModels.includes(modelValue)) modelValue = availableModels[0];
+        gameState.addNotification({ title: '模型列表已更新', text: `找到 ${availableModels.length} 个模型`, type: 'success', icon: 'list' });
+      } catch (error) {
+        gameState.addNotification({ title: '无法获取模型', text: error.message, type: 'warning', icon: 'alert-triangle' });
+      }
+      render();
+    });
+    const testConnection = createElement('button', { className: 'btn' }, ['测试连接']);
+    testConnection.addEventListener('click', async () => {
+      testConnection.disabled = true;
+      try {
+        await aiClient.testConnection({ endpoint: endpointValue, model: modelValue, apiKey: apiKeyValue || undefined });
+        gameState.addNotification({ title: 'AI连接成功', text: `模型 ${modelValue} 已返回兼容响应`, type: 'success', icon: 'check-circle' });
+      } catch (error) {
+        gameState.addNotification({ title: 'AI连接失败', text: error.message, type: 'warning', icon: 'alert-triangle' });
+      }
+      render();
+    });
     const clearConfig = createElement('button', { className: 'btn' }, ['清除在线配置']);
-    clearConfig.addEventListener('click', () => { aiClient.clearConfiguration(); endpointValue=''; modelValue=''; apiKeyValue=''; render(); });
+    clearConfig.addEventListener('click', () => { aiClient.clearConfiguration(); endpointValue=''; modelValue=''; apiKeyValue=''; availableModels=[]; render(); });
+    const resetConnection = createElement('button', { className: 'btn' }, ['重置连接']);
+    resetConnection.addEventListener('click', () => { aiClient.reset(); gameState.addNotification({ title: 'AI连接已重置', text: '失败计数已清零，将重新尝试在线模型。', type: 'success', icon: 'refresh-cw' }); render(); });
     container.appendChild(createElement('div', { className: 'ai-config-box' }, [
-      createElement('h3', {}, ['玩家自己的 AI']), endpoint, model, apiKey,
-      createElement('div', { className: 'settings-hint' }, ['支持 HTTP/HTTPS OpenAI兼容 /chat/completions。HTTPS页面调用远程HTTP可能被浏览器拦截；Key仅存sessionStorage。']),
-      createElement('div', { className: 'ai-proposal-buttons' }, [saveConfig, clearConfig]),
+      createElement('h3', {}, ['玩家自己的 AI']), endpoint, model, modelList, apiKey,
+      createElement('div', { className: 'settings-hint' }, ['支持 HTTP/HTTPS OpenAI兼容 /chat/completions；自动从同一路径的 /models 获取模型。HTTPS页面调用远程HTTP可能被浏览器拦截；Key仅存sessionStorage。']),
+      createElement('div', { className: 'ai-proposal-buttons' }, [saveConfig, fetchModels, testConnection, clearConfig, resetConnection]),
     ]));
 
     const instruction = createElement('textarea', { className: 'ai-instruction', placeholder: '可选：描述你想生成的内容，例如“生成适合雪地的食品建筑”' });

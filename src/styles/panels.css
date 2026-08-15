@@ -307,6 +307,37 @@
 .btn-active { color: #7bd88f; border-color: rgba(123,216,143,0.3); }
 .btn-muted { color: var(--text-dim); border-color: var(--border-subtle); }
 
+/* 自动加工数量配置 */
+.auto-production-count {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.auto-count-label {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+.auto-count-input {
+  width: 48px;
+  padding: 2px 4px;
+  font-size: 11px;
+  color: var(--text-primary);
+  background: var(--bg-input, rgba(255,255,255,0.08));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  text-align: center;
+}
+.auto-count-status {
+  font-size: 10px;
+  color: var(--text-secondary);
+  min-width: 28px;
+  text-align: center;
+}
+.auto-production-row {
+  flex-wrap: wrap;
+}
+
 /* 建筑信息侧面板自动加工 */
 .building-info-auto-row {
   display: flex;
@@ -1079,6 +1110,34 @@
 }
 .settings-input {
   width: 200px;
+}
+
+/* ---- 精灵分片拼合弹窗 ---- */
+.sprite-face-modal { max-width: 420px; }
+.sprite-upload-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: var(--sp-3) 0;
+}
+.sprite-dir-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-2);
+  background: var(--bg-card);
+  border-radius: var(--radius);
+}
+.sprite-dir-label {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-bold);
+  min-width: 72px;
+  flex-shrink: 0;
+}
+.sprite-dir-status {
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+  margin-left: auto;
 }
 
 /* ---- 响应式 ---- */

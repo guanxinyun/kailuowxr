@@ -11,6 +11,7 @@ import { textureManager } from '../core/TextureManager.js';
 import { TEXTURE_SLOTS, getTextureSlotsByCategory } from '../data/textureSlots.js';
 import { openCropModal } from './TextureCropModal.js';
 import { openBuildingFaceModal } from './BuildingFaceModal.js';
+import { openSpriteFaceModal } from './SpriteFaceModal.js';
 import { canStartExpedition, startExpedition, generateRandomExpedition } from '../core/ExplorationSystem.js';
 import { getInventoryQuantity } from '../core/ProductionSystem.js';
 import { saveManager } from '../core/SaveManager.js';
@@ -359,10 +360,13 @@ function createTextureSettings() {
     const record = textureManager.getRecord(slot.id);
     const image = textureManager.getImage(slot.id);
     hint.textContent = slot.hint;
-    // 分面拼合按钮仅对非道路建筑显示；此时隐藏上传按钮
+    // 分面拼合按钮仅对非道路建筑显示；上传按钮始终显示
     const isBuildingNotRoad = slot.kind === 'building' && slot.id !== 'building.road';
     faceButton.style.display = isBuildingNotRoad ? '' : 'none';
-    uploadButton.style.display = isBuildingNotRoad ? 'none' : '';
+    // 精灵分片按钮仅对精灵类型显示
+    const isSprite = slot.kind === 'sprite';
+    spriteFaceButton.style.display = isSprite ? '' : 'none';
+    uploadButton.style.display = '';
     if (image) {
       preview.src = typeof image.src === 'string' ? image.src : '';
       if (!preview.src) {
@@ -410,13 +414,13 @@ function createTextureSettings() {
       const imgW = img.width || img.naturalWidth;
       const imgH = img.height || img.naturalHeight;
 
-      // 如果图片尺寸已完全匹配目标，或没有目标尺寸，直接安装
-      if (!targetW || !targetH || (imgW === targetW && imgH === targetH)) {
+      // 完整建筑图始终进入预览/裁剪流程；其他已匹配尺寸的素材可直接安装
+      const needsPresentation = slot?.kind === 'building' || (targetW && targetH && (imgW !== targetW || imgH !== targetH));
+      if (!needsPresentation || !targetW || !targetH) {
         await textureManager.install(slotSelect.value, file);
         gameState.addNotification({ title: '纹理已更新', text: '自定义素材已应用到游戏画面', type: 'success', icon: 'image' });
       } else {
-        // 打开裁剪弹窗
-        const result = await openCropModal(img, targetW, targetH, { kind: slot?.kind });
+        const result = await openCropModal(img, targetW, targetH, { kind: slot?.kind === 'building' ? 'building' : slot?.kind });
         if (result === 'cancel') {
           // 用户取消
         } else if (result === null) {
@@ -449,6 +453,22 @@ function createTextureSettings() {
     if (result instanceof Blob) {
       await textureManager.install(slotSelect.value, result);
       gameState.addNotification({ title: '纹理已更新', text: '分面拼合建筑纹理已应用', type: 'success', icon: 'image' });
+      refresh();
+    }
+  });
+
+  const spriteFaceButton = createElement('button', { className: 'btn' }, [
+    lucideIcon('user', 14), document.createTextNode(' 分片拼合'),
+  ]);
+  spriteFaceButton.addEventListener('click', async () => {
+    const slot = TEXTURE_SLOTS.find((entry) => entry.id === slotSelect.value);
+    const targetW = slot?.targetWidth || 96;
+    const targetH = slot?.targetHeight || 128;
+    const result = await openSpriteFaceModal(targetW, targetH);
+    if (result === 'cancel') return;
+    if (result instanceof Blob) {
+      await textureManager.install(slotSelect.value, result);
+      gameState.addNotification({ title: '纹理已更新', text: '分片拼合精灵表已应用', type: 'success', icon: 'image' });
       refresh();
     }
   });
@@ -526,7 +546,7 @@ function createTextureSettings() {
     });
   });
 
-  const controls = createElement('div', { className: 'texture-controls' }, [uploadButton, faceButton, resetButton, clearButton, fileInput]);
+  const controls = createElement('div', { className: 'texture-controls' }, [uploadButton, faceButton, spriteFaceButton, resetButton, clearButton, fileInput]);
   const packControls = createElement('div', { className: 'texture-pack-controls' }, [packName, exportButton, importButton, packInput]);
   section.appendChild(createElement('div', { className: 'texture-preview-row' }, [preview, createElement('div', {}, [hint, status])]));
   section.appendChild(controls);

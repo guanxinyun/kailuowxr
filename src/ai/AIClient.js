@@ -1,6 +1,7 @@
 const USER_CONFIG_KEY = 'stardust-ai-user-config';
 const TIMEOUT_MS = 15000;
 const FAILURE_LIMIT = 3;
+const RETRY_RESET_MS = 60000; // 失败后 60 秒自动重置计数器
 const JSON_TYPES = new Set(['building_proposal', 'combo_proposal', 'species_proposal', 'tech_proposal', 'combo_comment', 'product_copy']);
 
 const SCHEMAS = {
@@ -21,24 +22,91 @@ function onlineEndpointAvailable() {
   return Boolean(userConfig()?.endpoint && userConfig()?.model);
 }
 
+export function getModelsEndpoint(endpoint) {
+  const url = new URL(endpoint);
+  const path = url.pathname.replace(/\/chat\/completions\/?$/, '/models');
+  url.pathname = path === url.pathname
+    ? `${path.replace(/\/$/, '')}/models`
+    : path;
+  url.search = '';
+  return url.toString();
+}
+
+export function normalizeModelList(payload) {
+  const entries = Array.isArray(payload?.data)
+    ? payload.data
+    : Array.isArray(payload?.models) ? payload.models : [];
+  return [...new Set(entries
+    .map((entry) => typeof entry === 'string' ? entry : entry?.id || entry?.model || entry?.name)
+    .filter((id) => typeof id === 'string' && id.trim())
+    .map((id) => id.trim()))];
+}
+
+export function getModelsPageEndpoint(endpoint, page) {
+  if (!page?.has_more || !page.last_id) return null;
+  const url = new URL(endpoint);
+  url.searchParams.set('after', page.last_id);
+  return url.toString();
+}
+
+async function readError(response, fallback) {
+  let detail = '';
+  try {
+    const body = await response.json();
+    detail = body?.error?.message || body?.error || body?.message || '';
+  } catch {
+    // Ignore non-JSON error bodies.
+  }
+  return new Error(detail ? `${fallback}: ${detail}` : fallback);
+}
+
+function requestHeaders(apiKey) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+  return headers;
+}
+
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 class AIClient {
   constructor() {
     this.failures = 0;
     this.cache = new Map();
     this.inFlight = new Map();
     this.status = 'offline';
+    this.lastError = '';
+    this._lastFailureTime = 0;
   }
 
   async generate(type, context, fallback, { cache = true } = {}) {
     const key = `${type}:${JSON.stringify(context)}`;
     if (cache && this.cache.has(key)) return this.cache.get(key);
     if (this.inFlight.has(key)) return this.inFlight.get(key);
+
+    // 失败后自动重试：超过 RETRY_RESET_MS 后重置失败计数
+    if (this.failures >= FAILURE_LIMIT && this._lastFailureTime && Date.now() - this._lastFailureTime > RETRY_RESET_MS) {
+      this.failures = 0;
+      this.status = 'offline';
+      this.lastError = '';
+    }
+
     if (!onlineEndpointAvailable() || this.failures >= FAILURE_LIMIT || (typeof navigator !== 'undefined' && !navigator.onLine)) {
       this.status = 'fallback';
       return fallback();
     }
 
-    const task = this._request(type, context).catch(() => fallback()).finally(() => this.inFlight.delete(key));
+    const task = this._request(type, context).catch((err) => {
+      this.lastError = err.message || String(err);
+      return fallback();
+    }).finally(() => this.inFlight.delete(key));
     this.inFlight.set(key, task);
     const result = await task;
     if (cache) this.cache.set(key, result);
@@ -46,18 +114,15 @@ class AIClient {
   }
 
   async _request(type, context) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const config = userConfig();
+    const endpoint = config.endpoint;
+    const headers = requestHeaders(config?.apiKey);
+    const wantsJson = JSON_TYPES.has(type);
     try {
-      const config = userConfig();
-      const endpoint = config.endpoint;
-      const headers = { 'Content-Type': 'application/json' };
-      if (config?.apiKey) headers.Authorization = `Bearer ${config.apiKey}`;
-      const wantsJson = JSON_TYPES.has(type);
       const prompt = wantsJson
         ? `只输出合法JSON，不使用Markdown。类型:${type}。必须匹配Schema:${SCHEMAS[type]}。禁止战斗、敌人、伤害、死亡和惩罚。当前事实:${JSON.stringify(context).slice(0, 12000)}`
         : `根据事实生成简短中文游戏文本。类型:${type}。不超过150字，不添加事实，不涉及战斗或惩罚。事实:${JSON.stringify(context).slice(0, 12000)}`;
-      const response = await fetch(endpoint, {
+      const response = await fetchWithTimeout(endpoint, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -69,9 +134,8 @@ class AIClient {
           temperature: 0.7,
           max_tokens: 1200,
         }),
-        signal: controller.signal,
       });
-      if (!response.ok) throw new Error(`AI ${response.status}`);
+      if (!response.ok) throw await readError(response, `AI ${response.status}`);
       const data = await response.json();
       const raw = data?.choices?.[0]?.message?.content;
       if (typeof raw !== 'string' || !raw.trim()) throw new Error('AI 响应格式错误');
@@ -82,11 +146,60 @@ class AIClient {
       return JSON.parse(cleaned);
     } catch (error) {
       this.failures++;
+      this._lastFailureTime = Date.now();
+      this.lastError = error.message || String(error);
       this.status = this.failures >= FAILURE_LIMIT ? 'fallback' : 'offline';
       throw error;
-    } finally {
-      clearTimeout(timer);
     }
+  }
+
+  async listModels({ endpoint, apiKey } = {}) {
+    const config = userConfig() || {};
+    const target = (endpoint ?? config.endpoint ?? '').trim();
+    if (!target) throw new Error('请先填写 AI 接口');
+    const headers = requestHeaders(apiKey === undefined ? config.apiKey : apiKey);
+    const models = [];
+    let pageUrl = getModelsEndpoint(target);
+    for (let pageIndex = 0; pageUrl && pageIndex < 100; pageIndex++) {
+      const response = await fetchWithTimeout(pageUrl, { headers });
+      if (!response.ok) throw await readError(response, `模型列表 ${response.status}`);
+      const page = await response.json();
+      models.push(...normalizeModelList(page));
+      const nextUrl = typeof page?.next === 'string' && page.next
+        ? new URL(page.next, pageUrl).toString()
+        : getModelsPageEndpoint(pageUrl, page);
+      pageUrl = nextUrl === pageUrl ? null : nextUrl;
+    }
+    const unique = [...new Set(models)];
+    if (!unique.length) throw new Error('接口没有返回可用模型');
+    return unique;
+  }
+
+  async testConnection({ endpoint, model, apiKey } = {}) {
+    const config = userConfig() || {};
+    const targetEndpoint = (endpoint ?? config.endpoint ?? '').trim();
+    const targetModel = (model ?? config.model ?? '').trim();
+    if (!targetEndpoint) throw new Error('请先填写 AI 接口');
+    if (!targetModel) throw new Error('请先选择模型');
+    const response = await fetchWithTimeout(targetEndpoint, {
+      method: 'POST',
+      headers: requestHeaders(apiKey === undefined ? config.apiKey : apiKey),
+      body: JSON.stringify({
+        model: targetModel,
+        messages: [{ role: 'user', content: '只回复 OK' }],
+        temperature: 0,
+        max_tokens: 8,
+      }),
+    });
+    if (!response.ok) throw await readError(response, `连接测试 ${response.status}`);
+    const data = await response.json();
+    if (typeof data?.choices?.[0]?.message?.content !== 'string') {
+      throw new Error('连接成功，但响应不是 OpenAI 兼容格式');
+    }
+    this.failures = 0;
+    this.status = 'online';
+    this.lastError = '';
+    return true;
   }
 
   configure({ endpoint = '', model = '', apiKey }) {
@@ -97,8 +210,8 @@ class AIClient {
   }
   clearConfiguration() { sessionStorage.removeItem(USER_CONFIG_KEY); this.reset(); }
   getConfiguration() { const value = userConfig(); return value ? { endpoint: value.endpoint || '', model: value.model || '', hasKey: Boolean(value.apiKey) } : null; }
-  reset() { this.failures = 0; this.status = 'offline'; }
-  getStatus() { return { mode: this.status, failures: this.failures, custom: Boolean(userConfig()?.endpoint) }; }
+  reset() { this.failures = 0; this.status = 'offline'; this.lastError = ''; this._lastFailureTime = 0; this.cache.clear(); }
+  getStatus() { return { mode: this.status, failures: this.failures, custom: Boolean(userConfig()?.endpoint), lastError: this.lastError }; }
 }
 
 export const aiClient = new AIClient();

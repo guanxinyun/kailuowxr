@@ -7,7 +7,7 @@ import { getManagedBuildings, upgradeBuilding } from '../core/BuildingSystem.js'
 import { getComboSummary } from '../core/ComboSystem.js';
 import { getCurrentBuildingDailyOutput, formatDailyRate } from '../core/ResourceFlowSystem.js';
 import { getShelfSlots, stockShelf, removeFromShelf, PRODUCT_PRICES, buyResource, getDailyBuyLimit, setPromotionLevel, startCampaign, PROMOTION_LEVELS, CAMPAIGN_TEMPLATES, getPromotionBonus } from '../core/TradeSystem.js';
-import { getInventoryEntry, getInventoryQuantity, getBuildingAutoProductionStatus, toggleBuildingAutoProduction } from '../core/ProductionSystem.js';
+import { getInventoryEntry, getInventoryQuantity, getBuildingAutoProductionStatus, toggleBuildingAutoProduction, setBuildingAutoProductionTarget, resetBuildingAutoProductionCount } from '../core/ProductionSystem.js';
 import { getQuality, PRODUCTION_RECIPES } from '../data/production.js';
 
 const RESOURCE_NAMES = {
@@ -74,7 +74,7 @@ export function openBuildingManagementPanel() {
           document.createTextNode(' 自动加工'),
         ]));
         for (const status of autoStatuses) {
-          const { recipe, enabled, active, progress } = status;
+          const { recipe, enabled, active, progress, targetCount, completedCount } = status;
           const row = createElement('div', { className: `auto-production-row ${enabled ? '' : 'disabled'}` });
 
           // 配方信息
@@ -96,9 +96,45 @@ export function openBuildingManagementPanel() {
             recipeInfo.appendChild(createElement('span', { className: 'auto-progress-text' }, [`加工中 ${pct}%`]));
           } else if (!enabled) {
             recipeInfo.appendChild(createElement('span', { className: 'auto-progress-text muted' }, ['已暂停']));
+          } else if (targetCount > 0 && completedCount >= targetCount) {
+            recipeInfo.appendChild(createElement('span', { className: 'auto-progress-text muted' }, [`已完成 ${completedCount}/${targetCount}`]));
           }
 
           row.appendChild(recipeInfo);
+
+          // 数量设置（目标数量，0=无限）
+          const countRow = createElement('div', { className: 'auto-production-count' });
+          const countLabel = createElement('span', { className: 'auto-count-label' }, ['数量']);
+          const countInput = createElement('input', {
+            type: 'number',
+            className: 'auto-count-input',
+            min: 0,
+            value: targetCount || 0,
+            title: '0 = 无限加工',
+            placeholder: '0=∞',
+          });
+          countInput.addEventListener('change', () => {
+            setBuildingAutoProductionTarget(entry.building, recipe.id, parseInt(countInput.value) || 0);
+            render();
+          });
+          const countStatus = createElement('span', { className: 'auto-count-status' }, [
+            targetCount > 0 ? `${completedCount}/${targetCount}` : '∞',
+          ]);
+          countRow.appendChild(countLabel);
+          countRow.appendChild(countInput);
+          countRow.appendChild(countStatus);
+          if (targetCount > 0 && completedCount > 0) {
+            const resetBtn = createElement('button', {
+              className: 'btn btn-sm',
+              title: '重置已完成计数',
+            }, ['重置']);
+            resetBtn.addEventListener('click', () => {
+              resetBuildingAutoProductionCount(entry.building, recipe.id);
+              render();
+            });
+            countRow.appendChild(resetBtn);
+          }
+          row.appendChild(countRow);
 
           // 开关按钮
           const toggleBtn = createElement('button', {

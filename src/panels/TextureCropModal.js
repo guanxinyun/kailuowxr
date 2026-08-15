@@ -5,6 +5,7 @@
  */
 import { ui } from '../core/UIManager.js';
 import { createElement, lucideIcon } from '../core/utils.js';
+import { drawCheckerboard, drawContainedImage } from '../core/TexturePresentation.js';
 
 /**
  * 将正方形源图区域等距投影到菱形 canvas
@@ -50,10 +51,15 @@ function drawIsometricProjection(outCtx, sourceImage, sx, sy, sw, sh, outW, outH
  */
 export function openCropModal(sourceImage, targetW, targetH, opts = {}) {
   const isDiamond = opts.kind === 'tile';
+  const isBuilding = opts.kind === 'building';
   // 地形模式：裁剪框强制正方形（1:1），输出时投影成菱形
   const cropRatio = isDiamond ? 1 : targetW / targetH;
 
   return new Promise((resolve) => {
+    let widthR = 2;
+    let depthR = 2;
+    let heightR = 3;
+    let useCrop = false;
     const srcW = sourceImage.width || sourceImage.naturalWidth;
     const srcH = sourceImage.height || sourceImage.naturalHeight;
 
@@ -80,11 +86,11 @@ export function openCropModal(sourceImage, targetW, targetH, opts = {}) {
     // 投影预览 canvas（地形模式下显示在主 canvas 右侧）
     let previewCanvas = null;
     let previewCtx = null;
-    if (isDiamond) {
+    if (isDiamond || isBuilding) {
       const previewSize = 128;
       previewCanvas = createElement('canvas', {
         width: previewSize,
-        height: previewSize / 2,
+        height: isDiamond ? previewSize / 2 : previewSize,
         className: 'crop-preview-canvas',
       });
       previewCtx = previewCanvas.getContext('2d');
@@ -156,23 +162,28 @@ export function openCropModal(sourceImage, targetW, targetH, opts = {}) {
       const label = isDiamond ? `${crop.w}×${crop.h} → 菱形投影` : `${crop.w}×${crop.h}`;
       ctx.fillText(label, dx + dw / 2, dy - 6);
 
-      // 更新投影预览
-      if (isDiamond && previewCtx && previewCanvas) {
+      // 更新最终效果预览
+      if (previewCtx && previewCanvas) {
         const pw = previewCanvas.width;
         const ph = previewCanvas.height;
         previewCtx.clearRect(0, 0, pw, ph);
-        // 棋盘格背景表示透明
-        previewCtx.fillStyle = '#2a2a3a';
-        previewCtx.fillRect(0, 0, pw, ph);
-        for (let py = 0; py < ph; py += 8) {
-          for (let px = 0; px < pw; px += 8) {
-            if ((px + py) % 16 === 0) {
-              previewCtx.fillStyle = '#3a3a4a';
-              previewCtx.fillRect(px, py, 8, 8);
-            }
+        drawCheckerboard(previewCtx, pw, ph);
+        if (isDiamond) {
+          drawIsometricProjection(previewCtx, sourceImage, crop.x, crop.y, crop.w, crop.h, pw, ph);
+        } else if (isBuilding) {
+          let image = sourceImage;
+          if (useCrop) {
+            const cropped = document.createElement('canvas');
+            cropped.width = crop.w;
+            cropped.height = crop.h;
+            cropped.getContext('2d').drawImage(sourceImage, crop.x, crop.y, crop.w, crop.h, 0, 0, crop.w, crop.h);
+            image = cropped;
           }
+          previewCtx.save();
+          previewCtx.imageSmoothingEnabled = true;
+          drawContainedImage(previewCtx, image, pw, ph, { frame: { widthR, depthR, heightR } });
+          previewCtx.restore();
         }
-        drawIsometricProjection(previewCtx, sourceImage, crop.x, crop.y, crop.w, crop.h, pw, ph);
       }
     }
 
@@ -298,9 +309,34 @@ export function openCropModal(sourceImage, targetW, targetH, opts = {}) {
       draw();
     }, { passive: false });
 
+    const sliders = createElement('div', { className: 'face-sliders' });
+    if (isBuilding) {
+      const createSlider = (label, min, max, step, value, onChange) => {
+        const valueLabel = createElement('span', { className: 'face-slider-value' }, [value.toFixed(1)]);
+        const range = createElement('input', {
+          type: 'range', min: String(min), max: String(max), step: String(step), value: String(value),
+          className: 'face-slider-input',
+        });
+        range.addEventListener('input', () => {
+          const next = Number(range.value);
+          valueLabel.textContent = next.toFixed(1);
+          onChange(next);
+          draw();
+        });
+        return createElement('div', { className: 'face-slider-row' }, [
+          createElement('span', { className: 'face-slider-label' }, [label]), range, valueLabel,
+        ]);
+      };
+      sliders.append(
+        createSlider('宽度', 0.5, 2, 0.1, widthR, value => { widthR = value; }),
+        createSlider('深度', 0.5, 2, 0.1, depthR, value => { depthR = value; }),
+        createSlider('高度', 1, 3, 0.1, heightR, value => { heightR = value; }),
+      );
+    }
+
     // ===== 按钮 =====
     const confirmBtn = createElement('button', { className: 'btn btn-primary' }, [
-      lucideIcon('crop', 14), document.createTextNode(isDiamond ? ' 确认（等距投影）' : ' 确认裁剪'),
+      lucideIcon('crop', 14), document.createTextNode(isDiamond ? ' 确认（等距投影）' : isBuilding ? ' 确认导入' : ' 确认裁剪'),
     ]);
     confirmBtn.addEventListener('click', () => {
       const outCanvas = document.createElement('canvas');
@@ -311,6 +347,16 @@ export function openCropModal(sourceImage, targetW, targetH, opts = {}) {
       if (isDiamond) {
         // 等距投影：正方形 → 菱形
         drawIsometricProjection(outCtx, sourceImage, crop.x, crop.y, crop.w, crop.h, targetW, targetH);
+      } else if (isBuilding) {
+        let image = sourceImage;
+        if (useCrop) {
+          const cropped = document.createElement('canvas');
+          cropped.width = crop.w;
+          cropped.height = crop.h;
+          cropped.getContext('2d').drawImage(sourceImage, crop.x, crop.y, crop.w, crop.h, 0, 0, crop.w, crop.h);
+          image = cropped;
+        }
+        drawContainedImage(outCtx, image, targetW, targetH, { frame: { widthR, depthR, heightR } });
       } else {
         outCtx.drawImage(sourceImage, crop.x, crop.y, crop.w, crop.h, 0, 0, targetW, targetH);
       }
@@ -322,11 +368,20 @@ export function openCropModal(sourceImage, targetW, targetH, opts = {}) {
     });
 
     const originalBtn = createElement('button', { className: 'btn' }, [
-      lucideIcon('image', 14), document.createTextNode(' 使用原图'),
+      lucideIcon('crop', 14), document.createTextNode(isBuilding ? ' 使用裁剪区域' : ' 使用原图'),
     ]);
     originalBtn.addEventListener('click', () => {
-      ui.closeModal();
-      resolve(null);
+      if (!isBuilding) {
+        ui.closeModal();
+        resolve(null);
+        return;
+      }
+      useCrop = !useCrop;
+      originalBtn.classList.toggle('uploaded', useCrop);
+      originalBtn.textContent = '';
+      originalBtn.appendChild(lucideIcon(useCrop ? 'check' : 'crop', 14));
+      originalBtn.appendChild(document.createTextNode(useCrop ? ' 已使用裁剪区域' : ' 使用裁剪区域'));
+      draw();
     });
 
     const cancelBtn = createElement('button', { className: 'btn' }, [
@@ -337,9 +392,11 @@ export function openCropModal(sourceImage, targetW, targetH, opts = {}) {
       resolve('cancel');
     });
 
-    const shapeHint = isDiamond ? '（正方形→等距菱形投影）' : '';
+    const shapeHint = isDiamond
+      ? '（正方形→等距菱形投影）'
+      : isBuilding ? '（保持比例，不做等距投影）' : '';
     const info = createElement('div', { className: 'crop-info' }, [
-      `原图 ${srcW}×${srcH} → 目标 ${targetW}×${targetH}${shapeHint}　拖拽移动，角落缩放，滚轮调整`,
+      `原图 ${srcW}×${srcH} → 输出 ${targetW}×${targetH}${shapeHint}　宽/深/高控制最终尺寸；需要裁剪时拖拽或滚轮调整后启用“使用裁剪区域”`,
     ]);
 
     const controls = createElement('div', { className: 'crop-controls' }, [
@@ -347,12 +404,12 @@ export function openCropModal(sourceImage, targetW, targetH, opts = {}) {
     ]);
 
     const children = [info];
-    if (isDiamond && previewCanvas) {
-      // 地形模式：主 canvas + 投影预览并排
+    if (isBuilding) children.push(sliders);
+    if ((isDiamond || isBuilding) && previewCanvas) {
       const canvasRow = createElement('div', { className: 'crop-canvas-row' }, [
         canvas,
         createElement('div', { className: 'crop-preview-box' }, [
-          createElement('div', { className: 'crop-preview-label' }, ['投影预览']),
+          createElement('div', { className: 'crop-preview-label' }, [isDiamond ? '投影预览' : '完整图预览']),
           previewCanvas,
         ]),
       ]);

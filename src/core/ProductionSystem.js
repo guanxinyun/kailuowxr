@@ -262,8 +262,11 @@ export function updateBuildingAutoProduction() {
       const ap = building.autoProduction[recipe.id] || { progress: 0, active: false };
       building.autoProduction[recipe.id] = ap;
 
-      // 检查是否启用（默认启用，兼容旧存档）
-      if (ap.enabled === false) continue;
+      // 检查是否启用（默认关闭，需要玩家手动开启）
+      if (!ap.enabled) continue;
+
+      // 检查目标数量限制（targetCount > 0 时，达到目标后停止）
+      if (ap.targetCount > 0 && (ap.completedCount || 0) >= ap.targetCount) continue;
 
       // 如果未激活（没有正在进行的生产），尝试开始新一轮
       if (!ap.active) {
@@ -293,6 +296,7 @@ export function updateBuildingAutoProduction() {
         addInventory(recipe.output.id, recipe.output.quantity, qualityScore);
         ap.active = false;
         ap.progress = 0;
+        ap.completedCount = (ap.completedCount || 0) + 1;
 
         bus.emit('production:auto-completed', {
           building,
@@ -314,10 +318,34 @@ export function toggleBuildingAutoProduction(building, recipeId) {
   if (!building.autoProduction) building.autoProduction = {};
   const ap = building.autoProduction[recipeId] || { progress: 0, active: false };
   building.autoProduction[recipeId] = ap;
-  const newEnabled = ap.enabled === false; // 默认 true，取反
+  const newEnabled = !ap.enabled; // 默认 false，取反
   ap.enabled = newEnabled;
   bus.emit('building:auto-production-toggled', { building, recipeId, enabled: newEnabled });
   return newEnabled;
+}
+
+/**
+ * 设置建筑自动加工的目标数量
+ * @param {object} building - 建筑实例
+ * @param {string} recipeId - 配方 ID
+ * @param {number} count - 目标数量，0 表示无限
+ */
+export function setBuildingAutoProductionTarget(building, recipeId, count) {
+  if (!building.autoProduction) building.autoProduction = {};
+  const ap = building.autoProduction[recipeId] || { progress: 0, active: false };
+  building.autoProduction[recipeId] = ap;
+  ap.targetCount = Math.max(0, count);
+  if (ap.targetCount > 0) ap.completedCount = ap.completedCount || 0;
+  bus.emit('building:auto-production-toggled', { building, recipeId });
+}
+
+/**
+ * 重置建筑自动加工的已完成计数
+ */
+export function resetBuildingAutoProductionCount(building, recipeId) {
+  if (!building.autoProduction?.[recipeId]) return;
+  building.autoProduction[recipeId].completedCount = 0;
+  bus.emit('building:auto-production-toggled', { building, recipeId });
 }
 
 /**
@@ -332,9 +360,11 @@ export function getBuildingAutoProductionStatus(building) {
     const ap = building.autoProduction?.[recipe.id];
     return {
       recipe,
-      enabled: ap?.enabled !== false,
+      enabled: !!ap?.enabled,
       active: ap?.active || false,
       progress: ap?.progress || 0,
+      targetCount: ap?.targetCount || 0,
+      completedCount: ap?.completedCount || 0,
     };
   });
 }
