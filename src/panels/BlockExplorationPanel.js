@@ -148,7 +148,10 @@ export function showBlockEventModal(outcome) {
     narrationEl.textContent = text;
   });
 
-  const confirmBtn = createElement('button', { className: 'btn btn-primary', style: { alignSelf: 'flex-end' } }, ['知道了']);
+  const confirmBtn = createElement('button', {
+    className: 'btn btn-primary',
+    style: { alignSelf: 'flex-end', marginTop: '6px', minWidth: '88px', touchAction: 'manipulation' },
+  }, ['知道了']);
   confirmBtn.addEventListener('click', () => ui.closeModal());
   container.appendChild(confirmBtn);
 

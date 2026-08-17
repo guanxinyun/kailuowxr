@@ -287,9 +287,51 @@
     grid-template-columns: 1fr;
   }
 
-  /* ---- 探索面板 ---- */
+  /* ---- 探索面板与卡牌遭遇战适配 ---- */
   .explore-grid {
     grid-template-columns: 1fr;
+  }
+  .spire-battle-container {
+    max-height: 85dvh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: var(--sp-1) 0;
+    gap: var(--sp-2);
+  }
+  .spire-deck-builder {
+    max-height: 50dvh;
+  }
+  .spire-deck-grid {
+    grid-template-columns: 1fr;
+    gap: var(--sp-2);
+  }
+  .spire-arena {
+    grid-template-columns: 1fr;
+    gap: var(--sp-2);
+    padding: 8px 10px;
+  }
+  .spire-arena-center {
+    flex-direction: row;
+    justify-content: space-between;
+    width: 100%;
+  }
+  .spire-hand-cards {
+    padding-bottom: 12px;
+  }
+  .spire-hand-card {
+    min-width: 120px;
+    max-width: 135px;
+    min-height: 115px;
+    padding: 6px 8px;
+  }
+  .spire-battle-actions {
+    flex-direction: column;
+    gap: 8px;
+    align-items: stretch;
+  }
+  .spire-battle-actions .btn {
+    width: 100%;
+    justify-content: center;
   }
 
   /* ---- 存档面板 ---- */
