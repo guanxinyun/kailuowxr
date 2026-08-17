@@ -51,15 +51,15 @@ export function buildComboWonderFacts(buildingNames = [], visitor = null) {
 
 export function getNarrationFallback(type, facts) {
   const text = {
-    product_copy: `${facts.baseName || '这件产品'}完成了可靠加工，适合殖民地日常使用。`,
-    tourist_personality: '这位游客温和而好奇，喜欢慢慢观察殖民地。',
-    tourist_review: `这次旅程令人难忘，满意度约为${facts.satisfaction ?? 70}%。`,
-    exploration_log: `${facts.residentName || '考察员'}记录了当地环境的和平生态现象。`,
-    exploration_event: `${facts.residentNames?.[0] || '探索队'}在${facts.tileName || '未知区域'}${facts.good ? '有所收获' : '遇到了一点小波折'}：${facts.effectText || ''}${facts.bonusText ? `，${facts.bonusText}` : ''}。`,
-    scenery_event: `${facts.visitorName} 拜访了 ${facts.buildingName}：${facts.effectDesc || '深受震撼，流连忘返'}。`,
-    combo_wonder_event: `【奇遇】${facts.visitorName || '居民'}在${facts.buildingNames?.join('与') || '建筑群'}附近目击了不可思议的奇趣现象！`,
-    factual_diary: facts.facts?.[0]?.text ? `今天，${facts.facts[0].text}。` : '今天的殖民地依然平稳，我期待新的发现。',
-    annual_summary: `第${facts.year || 1}年稳步结束，继续发挥优势并照顾资源净变化。`,
+    product_copy: `【工坊优选】${facts.baseName || '这件产品'}已顺利出厂。虽然做工扎实，但居民们似乎一致认为它非常适合拿来当压泡面盖的重物。`,
+    tourist_personality: '“只要有冰淇淋和纪念品，即使被外星触手缠住我也能给好评。” ——该游客在入境登记表上的自述。',
+    tourist_review: `“景观非常宏伟，不过烤冷面摊位前排队太长了，扣一星。” 满意度约 ${facts.satisfaction ?? 70}%，下次还会带亲戚来。`,
+    exploration_log: `【考察快讯】${facts.residentName || '考察员'}在野外发现了奇怪的荧光矿石，顺手捡了两块准备带回宿舍当小夜灯。`,
+    exploration_event: `【野外速报】${facts.residentNames?.[0] || '探索队'}在${facts.tileName || '未知区域'}${facts.good ? '发现了宝藏' : '遭遇了一点小波折'}：${facts.effectText || ''}${facts.bonusText ? `，${facts.bonusText}` : ''}。“虽然差点把鞋跑丢，但收获颇丰。”`,
+    scenery_event: `【景观打卡】${facts.visitorName} 拜访了 ${facts.buildingName}：${facts.effectDesc || '在反重力喷泉前吃烤肠，不慎把酱汁喷到了外交官衬衫上，对方评价‘咸淡适中’'}。`,
+    combo_wonder_event: `【弊誌快讯】${facts.visitorName || '居民'}在${facts.buildingNames?.join('与') || '建筑群'}附近目击了不可思议的共振现象！研究员当场宣布菠菜具备了量子计算能力，但菠菜表示只想被炒成菜。`,
+    factual_diary: facts.facts?.[0]?.text ? `【观察员手记】今天，${facts.facts[0].text}。工会代表向编辑部保证：只要发点心，大家绝不会消极怠工。` : '【观察员手记】今天的殖民地依然平稳，只是自来水管里偶尔会流出草莓味果汁。',
+    annual_summary: `【星尘年报】第${facts.year || 1}年正式收官。评审委员会一致认为殖民地运营良好，尤其是年末发放勋章后，居民的摸鱼现象得到了明显遏制。`,
   };
   return text[type] || '殖民地记录已更新。';
 }
