@@ -557,13 +557,13 @@ function gameTick() {
     bus.emit('year:review');
   }
 
-  // ===== 月度结算：维护费 + 星尘月报 =====
-  if (gameState.state.day % BALANCE.monthly.monthDays === 0) {
+  // ===== 季报结算（每 90 天）：维护费 + 星尘季报 =====
+  if (gameState.state.day % 90 === 0) {
     const maintenance = runMonthlyMaintenance();
     if (maintenance.summary.credits > 0) {
       gameState.addNotification({
-        title: '月度维护',
-        text: `本月 ${maintenance.summary.buildings} 栋设施维护，扣除 ${maintenance.summary.credits} 星币`,
+        title: '季度设施维护',
+        text: `本季 ${maintenance.summary.buildings} 栋设施维护，扣除 ${maintenance.summary.credits} 星币`,
         type: 'info',
         icon: 'wrench',
       });
@@ -571,7 +571,7 @@ function gameTick() {
     const facts = buildMonthlyBriefingFacts(gameState.state);
     showMonthlyBriefing(facts);
 
-    // 月度组合自动检查（AI 根据已建成设施提出并采纳布局组合）
+    // 季度组合自动检查（AI 根据已建成设施提出并采纳布局组合）
     runMonthlyComboCheck();
   }
 

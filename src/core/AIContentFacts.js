@@ -64,10 +64,10 @@ export function getNarrationFallback(type, facts) {
   return text[type] || '殖民地记录已更新。';
 }
 
-/** 汇总本周期（自上次结算以来）的事件，供月度简报 AI 生成 */
+/** 汇总本周期（自上次结算以来，季报按 90 天周期）的事件，供简报 AI 生成 */
 export function buildMonthlyBriefingFacts(state) {
-  const monthDays = BALANCE.monthly?.monthDays || 30;
-  const sinceDay = Math.max(0, state.day - monthDays);
+  const periodDays = 90;
+  const sinceDay = Math.max(0, state.day - periodDays);
   const events = (state.eventLog || [])
     .filter((e) => e.day > sinceDay)
     .slice(-20)
@@ -90,7 +90,7 @@ export function buildMonthlyBriefingFacts(state) {
 }
 
 /**
- * 月度简报本地降级：开罗风幽默（Kairo-style Humor）新闻体
+ * 季报本地降级：开罗风幽默（Kairo-style Humor）新闻体
  * 三段式：官方通报 ➔ 当事人脱线采访 ➔ 冷面吐槽结语
  * 保持荒诞市井小市民气息 + 一本正经的官方冷幽默
  */
@@ -100,21 +100,21 @@ export function getMonthlyBriefingFallback(facts) {
   const bad = events.filter((e) => !e.good).length;
 
   const openers = [
-    `【星尘月报 · 弊誌专栏】第${facts.year}年第${facts.day}天。据弊誌特派员调查，殖民地目前已有 ${facts.population || 0} 名居民与 ${facts.buildings || 0} 栋建筑在平稳运转。“只要按时发放草莓味口粮，大家就绝不会消极怠工。”工会代表接受采访时如此保证道。`,
-    `【星尘月报 · 弊誌专栏】转眼又是 30 天。弊誌记者潜入降落点生活区暗访，发现居民们正聚在自制长椅上认真研读《三分钟掌握星际摸鱼微操作》。以下为本月官方通报要闻。`,
-    `【星尘月报 · 弊誌专栏】第${facts.year}年第${facts.day}天。弊誌编辑部向全体开拓者致以亲切问候——虽然上周派去采访的记者因为误把外星杏鲍菇当成麦克风，目前正在医务室接受心理疏导。`,
+    `【星尘季报 · 弊誌专栏】第${facts.year}年第${facts.day}天。据弊誌特派员调查，殖民地目前已有 ${facts.population || 0} 名居民与 ${facts.buildings || 0} 栋建筑在平稳运转。“只要按时发放草莓味口粮，大家就绝不会消极怠工。”工会代表接受采访时如此保证道。`,
+    `【星尘季报 · 弊誌专栏】转眼一个季度过去。弊誌记者潜入降落点生活区暗访，发现居民们正聚在自制长椅上认真研读《三分钟掌握星际摸鱼微操作》。以下为本季度官方通报要闻。`,
+    `【星尘季报 · 弊誌专栏】第${facts.year}年第${facts.day}天。弊誌编辑部向全体开拓者致以亲切问候——虽然上周派去采访的记者因为误把外星杏鲍菇当成麦克风，目前正在医务室接受心理疏导。`,
   ];
   const opener = openers[(facts.day || 0) % openers.length];
 
   let headline = '';
   if (events[0]) {
-    headline = `【本月要闻】关于“${events[0].title}”的专项通报：${events[0].text}。当事居民兴奋地表示“以后还要再接再厉”，不过他今天因严重肌肉酸痛正在家中静养。弊誌将持续关注后续动向。`;
+    headline = `【要闻通报】关于“${events[0].title}”的专项通报：${events[0].text}。当事居民兴奋地表示“以后还要再接再厉”，不过他今天因严重肌肉酸痛正在家中静养。弊誌将持续关注后续动向。`;
   } else {
-    headline = '【本月要闻】全月风平浪静，大家除了按部就班拧螺丝外没有发生任何意外，弊誌记者一度因缺乏大新闻而感到深深的失业危机。';
+    headline = '【要闻通报】全季风平浪静，大家除了按部就班拧螺丝外没有发生任何意外，弊誌记者一度因缺乏大新闻而感到深深的失业危机。';
   }
 
   const tally = (good + bad) > 0
-    ? `【劳资与民生简报】本月共记录 ${good + bad} 起大情小事（${good} 起喜报、${bad} 起小波折）。${bad > good ? '调查表明，如果不给开拓者们发点礼物或勋章，他们可能会集体宅在宿舍里打扑克。' : '整体态势蒸蒸日上，不少外星游客甚至当场打听起了购房落户政策。'}`
+    ? `【劳资与民生简报】本季度共记录 ${good + bad} 起大情小事（${good} 起喜报、${bad} 起小波折）。${bad > good ? '调查表明，如果不给开拓者们发点礼物或勋章，他们可能会集体宅在宿舍里打扑克。' : '整体态势蒸蒸日上，不少外星游客甚至当场打听起了购房落户政策。'}`
     : '';
 
   const mood = `【殖民地评级】当前居民综合幸福度为 ${facts.happiness}%。${facts.happiness < 40 ? '满意度明显偏低，建议管理者尽快新建娱乐设施，或者在年末举办一场感人肺腑的勋章授与式。' : facts.happiness > 70 ? '居民们笑逐颜开，纷纷夸赞食堂饭菜香甜、居住舱宽敞明亮，恨不得下一部作品还住在这里。' : '各项指标中规中矩，大家在努力工作与偷懒摸鱼之间维持着微妙而完美的平衡。'}`;

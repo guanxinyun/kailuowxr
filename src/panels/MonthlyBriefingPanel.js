@@ -32,7 +32,7 @@ export function showMonthlyBriefing(facts) {
   const fallback = getMonthlyBriefingFallback(facts);
   render(fallback);
 
-  const content = ui.createModalContent('星尘月报', 'book-open', container);
+  const content = ui.createModalContent('星尘季报', 'book-open', container);
   ui.openModal(content, 'modal-md', { priority: 10 });
 
   aiClient.generate('monthly_briefing', facts, () => fallback, { cache: false }).then((text) => {

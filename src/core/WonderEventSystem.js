@@ -33,13 +33,26 @@ export function findNearbyBuildingClusters() {
   return clusters;
 }
 
+// 奇遇冷却与历史去重，避免连续触发和同事件重复刷屏
+let lastWonderDay = -999;
+const WONDER_COOLDOWN_DAYS = 25; // 至少间隔 25 天才可触发一次大奇遇
+const recentWonderEventIds = [];
+
 /**
  * 触发一次特殊组合奇遇事件
  * @param {Array} buildingGroup 参与的建筑实例列表
  * @param {Object} visitor 触发者（游客或居民）
+ * @param {Boolean} force 是否强制触发（调试用）
  */
-export function triggerComboWonderEvent(buildingGroup = null, visitor = null) {
+export function triggerComboWonderEvent(buildingGroup = null, visitor = null, force = false) {
   const state = gameState.state;
+  const currentDay = state.day || 0;
+
+  // 严格冷却判定
+  if (!force && currentDay - lastWonderDay < WONDER_COOLDOWN_DAYS) {
+    return null;
+  }
+
   if (!buildingGroup || buildingGroup.length < 1) {
     const clusters = findNearbyBuildingClusters();
     if (clusters.length > 0) {
@@ -57,7 +70,11 @@ export function triggerComboWonderEvent(buildingGroup = null, visitor = null) {
   // 1. 尝试匹配预存池 (PRESET_COMBO_EVENTS + state.aiContent.generatedComboEvents)
   const allEvents = [...PRESET_COMBO_EVENTS, ...(state.aiContent?.generatedComboEvents || [])];
 
-  const matched = allEvents.filter(ev => {
+  // 优先排除最近触发过的事件（最近4次不重复）
+  const validPool = allEvents.filter(ev => !recentWonderEventIds.includes(ev.id));
+  const poolToSearch = validPool.length > 0 ? validPool : allEvents;
+
+  const matched = poolToSearch.filter(ev => {
     if (ev.speciesId && visitor?.speciesId !== ev.speciesId) return false;
     if (ev.requiredBuildings?.length) {
       return ev.requiredBuildings.every(req => buildingIds.includes(req));
@@ -102,6 +119,10 @@ export function triggerComboWonderEvent(buildingGroup = null, visitor = null) {
   let eventData = null;
   if (matched.length > 0) {
     const picked = matched[Math.floor(Math.random() * matched.length)];
+    if (picked.id) {
+      recentWonderEventIds.push(picked.id);
+      if (recentWonderEventIds.length > 4) recentWonderEventIds.shift();
+    }
     eventData = {
       title: picked.title || picked.name,
       story: picked.story,
@@ -115,13 +136,15 @@ export function triggerComboWonderEvent(buildingGroup = null, visitor = null) {
     eventData = {
       title: `【奇遇】${buildingNames.join('与')}的超频日常`,
       story: `${visitor?.name || '殖民地开拓者'}在漫步路过${buildingNames.join('与')}时，目击了反差极大的奇趣现象。现场居民纷纷驻足围观并展开了极其热烈的讨论。`,
-      flavor: '“虽然不知道发生了什么，但我猜这肯定能写进月报。” ——某位路过的高级技工',
+      flavor: '“虽然不知道发生了什么，但我猜这肯定能写进季报。” ——某位路过的高级技工',
       icon: 'sparkles',
       rewardDesc,
       buildingNames,
       visitorName: visitor?.name || '开拓者',
     };
   }
+
+  lastWonderDay = currentDay;
 
   // 4. 弹出奇遇弹窗
   openWonderEventModal(eventData);

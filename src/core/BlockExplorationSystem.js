@@ -140,6 +140,10 @@ export function getBlockExplorationMonthlyFee(residentCount = 1) {
 }
 
 export function canStartBlockExploration(bx, by, residentIds) {
+  // 单区域探索约束：当前仅允许同时进行 1 个区块探索任务
+  if ((gameState.state.blockExplorations || []).length >= 1) {
+    return { ok: false, reason: '当前已有正在进行的区域勘探任务，请等待勘探完成或撤回后再开启新区域' };
+  }
   const block = getExplorableBlocks().find((b) => b.bx === bx && b.by === by);
   if (!block) return { ok: false, reason: '该区块不可探索（需紧邻已探明区域）' };
   if (getActiveBlockExploration(bx, by)) return { ok: false, reason: '该区块已在探索中' };

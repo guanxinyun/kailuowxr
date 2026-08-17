@@ -53,8 +53,18 @@ export function updateTouristSystem() {
   processTouristDeparture(leaving);
 
   // 必须拥有已建成并正常运营的【星际港口 (starport)】，外星穿梭机才能降落
-  const hasStarport = buildings.some(b => b.buildingId === 'starport');
-  if (!hasStarport) return;
+  const starportBuilding = buildings.find(b => b.buildingId === 'starport');
+  if (!starportBuilding) return;
+
+  // 1. 首航迎客机制：若从未迎客过（首次建成），立即触发首航降落
+  const isFirstArrival = !gameState.state.stats?.firstStarportArrival;
+  if (isFirstArrival) {
+    if (!gameState.state.stats) gameState.state.stats = {};
+    gameState.state.stats.firstStarportArrival = true;
+    lastTouristDay = day;
+    spawnTouristGroup(day, buildings, starportBuilding, true);
+    return;
+  }
 
   // 计算旅游吸引力（基于文化类与景点建筑）
   let tourismAttraction = 0;
@@ -81,12 +91,16 @@ export function updateTouristSystem() {
   const promotionBonus = getPromotionBonus();
   tourismAttraction *= (1 + promotionBonus);
 
-  // 每5-15天来一批游客，取决于吸引力
-  const interval = Math.max(5, 20 - tourismAttraction);
+  // 到访间隔平滑化（3~10天）
+  const interval = Math.max(3, Math.round(12 - tourismAttraction * 0.5));
   if (day - lastTouristDay < interval) return;
 
   lastTouristDay = day;
+  spawnTouristGroup(day, buildings, starportBuilding, false);
+}
 
+/** 生成外星游客批次 */
+function spawnTouristGroup(day, buildings, starportBuilding, isFirst = false) {
   // 随机选择一个种族（好感度越高越可能来）
   const weightedSpecies = [];
   for (const sp of SPECIES) {
@@ -98,7 +112,7 @@ export function updateTouristSystem() {
   const species = getSpeciesById(speciesId);
 
   // 生成1-3个游客
-  const count = 1 + Math.floor(Math.random() * 3);
+  const count = isFirst ? 2 : (1 + Math.floor(Math.random() * 3));
   const newTourists = [];
 
   for (let i = 0; i < count; i++) {
@@ -147,13 +161,15 @@ export function updateTouristSystem() {
   // 发出游客到达事件
   bus.emit('tourist:arrived', { species: speciesId, count, tourists: newTourists });
 
-  gameState.addNotification({
-    title: '外星游客到访！',
-    text: `${count}名${species.name}游客抵达殖民地。`,
-    type: 'tourist',
-    icon: species.icon || 'sparkles',
-    duration: 5000,
-  });
+  // 仅在星港上方生成一个轻量飘字动效，不使用全局 Notification 弹窗刷屏打扰玩家
+  if (starportBuilding) {
+    bus.emit('fx:float-text', {
+      x: starportBuilding.x,
+      y: starportBuilding.y,
+      text: isFirst ? `🚀 首航客抵：${species.name} ×${count}` : `🛸 游客抵达：${species.name} ×${count}`,
+      color: '#A8D8B9',
+    });
+  }
 
   // 游客到达后不再即时结算；满意度在离开时按路线结算
 }
@@ -199,14 +215,7 @@ export function triggerSceneryEvent(target, visitor, isTourist = true) {
   const facts = buildSceneryVisitFacts(visitorName, buildingName, eventType, effectDesc, isTourist);
   const fallback = getNarrationFallback('scenery_event', facts);
 
-  gameState.addNotification({
-    title: '景观打卡事件',
-    text: fallback,
-    type: 'success',
-    icon: 'sparkles',
-    duration: 6000,
-  });
-
+  // 景观打卡由建筑上方飘字直观展示，不再用 Notification 频繁弹窗刷屏
   bus.emit('scenery:event', { target, visitor, eventType, effectDesc, isTourist });
   aiClient.generate('scenery_event', facts, () => fallback).then(narration => {
     bus.emit('scenery:narration', { target, visitor, narration });
@@ -286,8 +295,8 @@ function updateAutonomousVisits(day) {
     }
   }
 
-  // 周期性（每隔数日约 8% 概率）在群落或特殊组合处触发双轨奇遇事件
-  if (Math.random() < 0.08 && buildings.length >= 2) {
+  // 周期性（每隔约 25~30 天有概率）在群落或特殊组合处触发双轨奇遇事件（内部受冷却与去重保护）
+  if (Math.random() < 0.04 && buildings.length >= 2) {
     const visitor = activeTourists.length > 0
       ? activeTourists[Math.floor(Math.random() * activeTourists.length)]
       : gameState.state.residents?.[0];
