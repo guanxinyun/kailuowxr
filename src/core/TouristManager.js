@@ -114,6 +114,9 @@ export function updateTouristSystem() {
       individualPref[dim] = Math.max(0, Math.min(10, Math.round((baseVal + offset) * 10) / 10));
     }
 
+    // 游客随机旅行预算 (20~90 星币)
+    const budget = 20 + Math.floor(Math.random() * 71);
+
     // 计算性格标签 (Traits)
     const traits = generateTouristTraits(speciesId, basePrefs, individualPref, budget);
 
