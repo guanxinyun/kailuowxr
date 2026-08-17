@@ -10,6 +10,7 @@ import { getBuildingById } from '../data/buildings.js';
 import { getBuildingOperationalState, isWorkDay } from './BuildingSystem.js';
 import { HAULABLE_RESOURCES } from './ResourceFlowSystem.js';
 import { BALANCE } from '../data/balance.js';
+import { getColonyStorageStats, dispatchItemToStorage } from './StorageSystem.js';
 
 function chebyshev(a, b) {
   return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
@@ -48,13 +49,14 @@ export function updateWarehouseHauling(state = gameState.state) {
       for (const res of HAULABLE_RESOURCES) {
         const amount = Number(src.buffer?.[res]) || 0;
         if (amount <= 0 || budget <= 0) continue;
-        const max = state.storage?.[res];
-        const space = Number.isFinite(max) ? Math.max(0, max - (state.resources?.[res] || 0)) : Infinity;
+        const stats = getColonyStorageStats(state);
+        const space = stats.freeSpace;
         if (space <= 0) continue;
         const move = Math.min(amount, budget, space);
         if (move <= 0) continue;
         src.buffer[res] = amount - move;
         gameState.addResource(res, move);
+        dispatchItemToStorage(res, move, hauler, state);
         budget -= move;
         hauled += move;
       }

@@ -37,6 +37,7 @@ import { updateBlockExplorations } from './core/BlockExplorationSystem.js';
 import { saveManager } from './core/SaveManager.js';
 import { generateComboComment, handleAIContentMilestone, restoreDynamicContent, updateDynamicContent, runMonthlyComboCheck } from './core/DynamicContentSystem.js';
 import { openAIContentPanel } from './panels/AIContentPanel.js';
+import { openTuningPanel } from './panels/TuningPanel.js';
 import { BALANCE } from './data/balance.js';
 import { sound } from './core/SoundSystem.js';
 import { getCurrentDailyResourceFlow, getCurrentBuildingDailyOutput, formatDailyRate } from './core/ResourceFlowSystem.js';
@@ -46,6 +47,8 @@ import { showMonthlyBriefing } from './panels/MonthlyBriefingPanel.js';
 import { buildMonthlyBriefingFacts } from './core/AIContentFacts.js';
 import { updateBuildingWorkCycle, getBuildingBufferStatus } from './core/WorkerScheduleSystem.js';
 import { handleTechCardUnlock } from './core/CardGameSystem.js';
+import { updateResidentDiaries } from './core/ResidentDiarySystem.js';
+import { assignResidentHouses } from './core/HousingSystem.js';
 
 // ===== Initialize =====
 async function init() {
@@ -80,6 +83,7 @@ async function init() {
   ensureTradeState();
   restoreDynamicContent();
   recalculatePopulationCapacity();
+  assignResidentHouses();
   assignWorkers();
 
   // 事件解锁探索区域
@@ -248,10 +252,15 @@ async function init() {
   // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-    // 隐藏调试入口：Ctrl+Shift+D 打开 AI 事件调试面板（调制模式）
+    // 快捷键：Ctrl+Shift+D 打开 AI 事件调试面板；Ctrl+Shift+T 打开全局数值调制模式
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'D' || e.key === 'd')) {
       e.preventDefault();
       openDebugPanel();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'T' || e.key === 't')) {
+      e.preventDefault();
+      openTuningPanel();
       return;
     }
     switch (e.key) {
@@ -369,8 +378,9 @@ function gameTick() {
           type: 'success',
           icon: 'check',
         });
-        // 建筑建成后：重算人口上限并重新分配居民工作
+        // 建筑建成后：重算人口上限、分配住宅与工作
         recalculatePopulationCapacity();
+        assignResidentHouses();
         assignWorkers();
       }
       continue; // 未建完不产出
@@ -496,10 +506,24 @@ function gameTick() {
   // 外星游客系统
   updateTouristSystem();
 
-  // Random events (1.5% chance per day)
-  if (Math.random() < 0.015 && gameState.state.day > 5) {
+  // Random & Tutorial events
+  // 1. 开局前 6 天每日按进度必然检查并触发初始剧情教程事件（着陆、住房摸鱼调查、异星特产等）
+  // 2. 之后根据 BALANCE 设定概率与用户设置倍率触发日常随机奇遇与 AI 事件
+  const triggeredEventIds = new Set((gameState.state.eventLog || []).map((e) => e.eventId).filter(Boolean));
+  const hasPendingTutorial = EVENTS.some((e) => e.tutorial && gameState.state.day >= e.minDay && !triggeredEventIds.has(e.id));
+
+  if (hasPendingTutorial) {
     triggerRandomEvent();
+  } else {
+    const freqMult = gameState.state.settings?.eventFrequencyMultiplier ?? 1.0;
+    const eventChance = (BALANCE.events?.dailyChance ?? 0.015) * freqMult;
+    if (Math.random() < eventChance && gameState.state.day > 6) {
+      triggerRandomEvent();
+    }
   }
+
+  // 每日居民生活日记记录（本地幽默池）
+  updateResidentDiaries();
 
   // AI periodic tips (every ~30 days)
   if (gameState.state.day % 30 === 15) {

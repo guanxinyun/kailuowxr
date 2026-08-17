@@ -458,3 +458,85 @@
   font-weight: var(--fw-bold);
   margin-bottom: 2px;
 }
+
+/* ---- 放置模式悬浮 HUD (Placement HUD) ---- */
+.placement-hud {
+  position: fixed;
+  bottom: calc(var(--bottombar-height, 28px) + var(--sp-3));
+  left: 50%;
+  transform: translate(-50%, 40px);
+  z-index: var(--z-notification, 300);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-4);
+  background: rgba(14, 18, 36, 0.88);
+  border: 1px solid rgba(100, 160, 255, 0.4);
+  border-radius: var(--radius-full, 9999px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 16px rgba(100, 160, 255, 0.2);
+  backdrop-filter: blur(12px);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
+}
+
+.placement-hud.active {
+  transform: translate(-50%, 0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.placement-hud-info {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.placement-hud-badge {
+  font-size: var(--fs-xs);
+  background: rgba(46, 204, 113, 0.2);
+  color: #2ECC71;
+  border: 1px solid rgba(46, 204, 113, 0.4);
+  padding: 1px var(--sp-2);
+  border-radius: var(--radius-sm);
+  font-weight: var(--fw-bold);
+}
+
+.placement-hud-name {
+  font-size: var(--fs-sm);
+  color: #FFFFFF;
+}
+
+.placement-hud-tip {
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+  border-left: 1px solid var(--border-subtle);
+  padding-left: var(--sp-2);
+}
+
+.placement-hud-cancel {
+  padding: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-xs);
+  border-radius: var(--radius-full, 9999px);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 移动端专属位置与尺寸适配 */
+@media (max-width: 768px) {
+  .placement-hud {
+    bottom: 64px; /* 避开底部工具栏 (52px + 间距) */
+    width: calc(100vw - 32px);
+    max-width: 380px;
+    justify-content: space-between;
+    padding: var(--sp-2) var(--sp-3);
+  }
+  .placement-hud-tip {
+    display: none; /* 屏幕窄时隐藏细微提示，保留核心信息与取消键 */
+  }
+  .placement-hud-cancel {
+    padding: var(--sp-2) var(--sp-3);
+    font-size: var(--fs-sm);
+  }
+}

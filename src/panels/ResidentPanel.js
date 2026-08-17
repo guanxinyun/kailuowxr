@@ -10,6 +10,7 @@ import { GRAVITY_CONFIG } from '../data/gamedata.js';
 import { getMoodLabel, getMoodColor, GRAVITY_LABELS } from '../data/residents.js';
 import { createRadarChart } from './DiplomacyPanel.js';
 import { getGrowthSummary } from '../core/ResidentGrowthSystem.js';
+import { openImmigrationModal } from './ImmigrationModal.js';
 
 export function openResidentPanel() {
   const container = createElement('div', { className: 'resident-panel-inner' });
@@ -27,6 +28,21 @@ export function openResidentPanel() {
     aiContainer,
     { label: 'AI 顾问', typeSpeed: 25 }
   );
+
+  // 招募入口按钮栏
+  const recruitActionBar = createElement('div', {
+    style: { display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' },
+  });
+  const recruitBtn = createElement('button', { className: 'btn btn-primary' }, [
+    lucideIcon('user-plus', 14),
+    document.createTextNode(' 移民中心招募'),
+  ]);
+  recruitBtn.addEventListener('click', () => {
+    ui.closeModal();
+    openImmigrationModal();
+  });
+  recruitActionBar.appendChild(recruitBtn);
+  container.appendChild(recruitActionBar);
 
   const list = createElement('div', { className: 'resident-list' });
 
@@ -140,15 +156,28 @@ function createResidentCard(resident) {
   const diary = createElement('div', { className: 'resident-diary' }, [
     createElement('h4', {}, [
       lucideIcon('scroll', 14),
-      document.createTextNode('日志'),
+      document.createTextNode('殖民手记与碎碎念'),
     ]),
   ]);
   if (resident.diary && resident.diary.length > 0) {
-    for (const entry of resident.diary.slice(-3)) {
+    for (const entry of resident.diary.slice(-6)) {
       diary.appendChild(createElement('p', {
-        style: { fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.6', marginBottom: '4px' },
+        style: {
+          fontSize: '12px',
+          color: 'var(--text-secondary)',
+          lineHeight: '1.6',
+          marginBottom: '6px',
+          padding: '4px 8px',
+          background: 'rgba(255,255,255,0.02)',
+          borderRadius: '4px',
+          borderLeft: '2px solid var(--border-glow)',
+        },
       }, [entry]));
     }
+  } else {
+    diary.appendChild(createElement('p', {
+      style: { fontSize: '12px', color: 'var(--text-dim)', fontStyle: 'italic' },
+    }, ['暂无手记，每天太阳升起时居民会记录生活所想。']));
   }
 
   // AI生成日记按钮

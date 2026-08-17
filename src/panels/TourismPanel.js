@@ -43,12 +43,38 @@ export function openTourismPanel() {
       const building = gameState.state.buildings.find(b => b.id === id);
       return building ? getBuildingById(building.buildingId)?.name : null;
     }).filter(Boolean);
+    const traits = tourist.traits || [];
+    const traitsEl = createElement('div', {
+      style: { display: 'flex', gap: '6px', margin: '4px 0', flexWrap: 'wrap' },
+    });
+    for (const t of traits) {
+      traitsEl.appendChild(createElement('span', {
+        title: t.desc,
+        style: {
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '4px',
+          padding: '2px 8px',
+          borderRadius: '12px',
+          fontSize: '11px',
+          fontWeight: '600',
+          background: `${t.color || '#3498DB'}22`,
+          color: t.color || '#3498DB',
+          border: `1px solid ${t.color || '#3498DB'}44`,
+        },
+      }, [
+        lucideIcon(t.icon || 'smile', 12),
+        document.createTextNode(t.label),
+      ]));
+    }
+
     touristSection.appendChild(createElement('div', { className: 'tourism-visitor' }, [
       createElement('div', { className: 'tourism-visitor-header' }, [
         createElement('strong', {}, [tourist.name]),
         createElement('span', {}, [`${tourist.speciesName} · 满意度 ${satisfaction.score}%`]),
       ]),
-      createElement('div', { className: 'tourism-preference' }, [`个性：${tourist.personality || '温和好奇'} · 偏好：${topPreferences}`]),
+      traitsEl,
+      createElement('div', { className: 'tourism-preference' }, [`心声：${tourist.personality || '温和好奇'} · 偏好：${topPreferences}`]),
       createElement('div', { className: 'tourism-itinerary' }, [`自主行程：${stops.join(' → ') || '尚未找到合适景点'}`]),
       createElement('div', { className: 'tourism-progress' }, [`已访问 ${tourist.visitedStops?.length || 0}/${stops.length} · 预算 ${tourist.budget} 星币`]),
     ]));

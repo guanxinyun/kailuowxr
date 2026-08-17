@@ -30,6 +30,25 @@ export function buildAnnualFacts(review) {
   return { year: review.year, grade: review.grade, scores: { ...(review.scores || {}) }, awards: [...(review.awards || [])], strongest: review.strongest, facts: { ...(review.facts || {}) } };
 }
 
+export function buildSceneryVisitFacts(visitorName, buildingName, eventType, effectDesc, isTourist) {
+  return {
+    visitorName,
+    buildingName,
+    eventType,
+    effectDesc,
+    isTourist: !!isTourist,
+  };
+}
+
+export function buildComboWonderFacts(buildingNames = [], visitor = null) {
+  return {
+    buildingNames,
+    visitorName: visitor?.name || '殖民地开拓者',
+    speciesName: visitor?.speciesName || '人类',
+    isTourist: !!visitor?.speciesId,
+  };
+}
+
 export function getNarrationFallback(type, facts) {
   const text = {
     product_copy: `${facts.baseName || '这件产品'}完成了可靠加工，适合殖民地日常使用。`,
@@ -37,6 +56,8 @@ export function getNarrationFallback(type, facts) {
     tourist_review: `这次旅程令人难忘，满意度约为${facts.satisfaction ?? 70}%。`,
     exploration_log: `${facts.residentName || '考察员'}记录了当地环境的和平生态现象。`,
     exploration_event: `${facts.residentNames?.[0] || '探索队'}在${facts.tileName || '未知区域'}${facts.good ? '有所收获' : '遇到了一点小波折'}：${facts.effectText || ''}${facts.bonusText ? `，${facts.bonusText}` : ''}。`,
+    scenery_event: `${facts.visitorName} 拜访了 ${facts.buildingName}：${facts.effectDesc || '深受震撼，流连忘返'}。`,
+    combo_wonder_event: `【奇遇】${facts.visitorName || '居民'}在${facts.buildingNames?.join('与') || '建筑群'}附近目击了不可思议的奇趣现象！`,
     factual_diary: facts.facts?.[0]?.text ? `今天，${facts.facts[0].text}。` : '今天的殖民地依然平稳，我期待新的发现。',
     annual_summary: `第${facts.year || 1}年稳步结束，继续发挥优势并照顾资源净变化。`,
   };
@@ -69,8 +90,9 @@ export function buildMonthlyBriefingFacts(state) {
 }
 
 /**
- * 月度简报本地降级：范文.txt「news」条目风格 —— 「弊誌」记者口吻 + 冷幽默。
- * 返回多段文本，用 \n\n 分隔。
+ * 月度简报本地降级：开罗风幽默（Kairo-style Humor）新闻体
+ * 三段式：官方通报 ➔ 当事人脱线采访 ➔ 冷面吐槽结语
+ * 保持荒诞市井小市民气息 + 一本正经的官方冷幽默
  */
 export function getMonthlyBriefingFallback(facts) {
   const events = facts.events || [];
@@ -78,20 +100,24 @@ export function getMonthlyBriefingFallback(facts) {
   const bad = events.filter((e) => !e.good).length;
 
   const openers = [
-    `【星尘月报】第${facts.year}年，第${facts.day}天。弊誌记者仍在不眠不休地追踪${facts.population || 0}名殖民者的一举一动——当然，他们本人似乎并不知情。`,
-    `【星尘月报】转眼又是 30 天。弊誌的记者蹲在降落点门口，终于等来了一位愿意开口的殖民者。以下是本月值得记录的大小事。`,
-    `【星尘月报】第${facts.year}年，第${facts.day}天。编辑部照例派出一名记者潜入殖民地，结果照例被当场认出并请了出去。`,
+    `【星尘月报 · 弊誌专栏】第${facts.year}年第${facts.day}天。据弊誌特派员调查，殖民地目前已有 ${facts.population || 0} 名居民与 ${facts.buildings || 0} 栋建筑在平稳运转。“只要按时发放草莓味口粮，大家就绝不会消极怠工。”工会代表接受采访时如此保证道。`,
+    `【星尘月报 · 弊誌专栏】转眼又是 30 天。弊誌记者潜入降落点生活区暗访，发现居民们正聚在自制长椅上认真研读《三分钟掌握星际摸鱼微操作》。以下为本月官方通报要闻。`,
+    `【星尘月报 · 弊誌专栏】第${facts.year}年第${facts.day}天。弊誌编辑部向全体开拓者致以亲切问候——虽然上周派去采访的记者因为误把外星杏鲍菇当成麦克风，目前正在医务室接受心理疏导。`,
   ];
+  const opener = openers[(facts.day || 0) % openers.length];
 
-  const headline = events[0]
-    ? `本月最受瞩目的消息：${events[0].title}——${events[0].text}`
-    : '本月风平浪静，弊誌记者一度以为自己要失业了。';
+  let headline = '';
+  if (events[0]) {
+    headline = `【本月要闻】关于“${events[0].title}”的专项通报：${events[0].text}。当事居民兴奋地表示“以后还要再接再厉”，不过他今天因严重肌肉酸痛正在家中静养。弊誌将持续关注后续动向。`;
+  } else {
+    headline = '【本月要闻】全月风平浪静，大家除了按部就班拧螺丝外没有发生任何意外，弊誌记者一度因缺乏大新闻而感到深深的失业危机。';
+  }
 
   const tally = (good + bad) > 0
-    ? `本月共记录 ${good + bad} 起事件：${good} 起喜事、${bad} 起波折。${bad > good ? '编辑部决定本月不派记者出门，以免触霉头。' : '殖民地似乎正走在一条不错的上坡路上。'}`
+    ? `【劳资与民生简报】本月共记录 ${good + bad} 起大情小事（${good} 起喜报、${bad} 起小波折）。${bad > good ? '调查表明，如果不给开拓者们发点礼物或勋章，他们可能会集体宅在宿舍里打扑克。' : '整体态势蒸蒸日上，不少外星游客甚至当场打听起了购房落户政策。'}`
     : '';
 
-  const mood = `幸福度 ${facts.happiness}%，${facts.buildings || 0} 栋建筑在运营。${facts.happiness < 40 ? '弊誌建议给殖民者们放个假——当然，费用自理。' : facts.happiness > 70 ? '殖民者们笑得挺开心，记者却总觉得少了点什么。' : '日子过得中规中矩，编辑部也无话可说。'}`;
+  const mood = `【殖民地评级】当前居民综合幸福度为 ${facts.happiness}%。${facts.happiness < 40 ? '满意度明显偏低，建议管理者尽快新建娱乐设施，或者在年末举办一场感人肺腑的勋章授与式。' : facts.happiness > 70 ? '居民们笑逐颜开，纷纷夸赞食堂饭菜香甜、居住舱宽敞明亮，恨不得下一部作品还住在这里。' : '各项指标中规中矩，大家在努力工作与偷懒摸鱼之间维持着微妙而完美的平衡。'}`;
 
-  return [openers[0], headline, tally, mood].filter(Boolean).join('\n\n');
+  return [opener, headline, tally, mood].filter(Boolean).join('\n\n');
 }

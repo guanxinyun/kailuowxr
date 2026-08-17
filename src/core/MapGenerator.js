@@ -19,24 +19,43 @@ export function generateMap(size = 32, seed = 42) {
 
       let type = 'plains';
 
+      // 限制湖泊大小（阈值调低），避免连片大洋阻断建设
       if (elevation > 0.55) type = 'mountain';
-      else if (elevation < -0.45) type = 'water';
+      else if (elevation < -0.58) type = 'water';
       else if (moisture > 0.4 && elevation > -0.1) type = 'forest';
       else if (mineral > 0.5 && elevation > 0) type = 'metal';
       else if (mineral > 0.45 && elevation < 0) type = 'crystal';
+
+      // 蜿蜒河流生成（基于脊状噪声曲线）
+      const riverCurve = Math.abs(noise2D(x * 0.05 + 800, y * 0.05 + 800));
+      if (riverCurve < 0.06 && elevation > -0.4 && elevation < 0.45) {
+        type = 'river';
+      }
 
       // Edge biomes: cold north/west, dry south/east
       if (edge > 0.68 && y < size * 0.38 && elevation < 0.6) type = 'snow';
       else if (edge > 0.68 && y > size * 0.62 && elevation > -0.5) type = 'desert';
 
-      // Rare ruins
-      if (type === 'plains' && Math.abs(noise2D(x * 0.3 + 300, y * 0.3 + 300)) > 0.7) {
-        type = 'ruins';
+      // Rare ruins & natural wonders / scenic spots
+      if (type === 'plains') {
+        const scenicNoise = Math.abs(noise2D(x * 0.35 + 500, y * 0.35 + 500));
+        if (scenicNoise > 0.82) {
+          type = 'hotspring';
+        } else if (scenicNoise > 0.76) {
+          type = 'monolith';
+        } else if (Math.abs(noise2D(x * 0.3 + 300, y * 0.3 + 300)) > 0.72) {
+          type = 'ruins';
+        }
       }
 
-      // Craters near mountains
-      if (type === 'mountain' && noise2D(x * 0.2 + 400, y * 0.2 + 400) > 0.6) {
-        type = 'crater';
+      // Craters and Aurora Canyons near mountains
+      if (type === 'mountain') {
+        const canyonNoise = noise2D(x * 0.25 + 600, y * 0.25 + 600);
+        if (canyonNoise > 0.65) {
+          type = 'aurora_canyon';
+        } else if (noise2D(x * 0.2 + 400, y * 0.2 + 400) > 0.6) {
+          type = 'crater';
+        }
       }
 
       row.push({

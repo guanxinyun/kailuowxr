@@ -98,10 +98,56 @@ export const PRODUCTION_RECIPES = [
     requiredBuilding: 'workshop',
     requiresBlueprint: true,
   },
+
+  // ===== 2级深度加工（由量子精密合成仪生产） =====
+  {
+    id: 'quantum_matrix',
+    name: '量子运算矩阵',
+    tier: 2,
+    category: 'processed',
+    icon: 'cpu',
+    desc: '将晶体电路与星尘合金深度重构的微观运算核心，广泛用于尖端研发。',
+    inputs: { crystal_circuit: 2, alloy: 1, energy: 10 },
+    output: { id: 'quantum_matrix', name: '量子运算矩阵', quantity: 1 },
+    days: 4,
+    requiredBuilding: 'quantum_assembler',
+  },
+  {
+    id: 'plasma_battery',
+    name: '等离子压缩电池',
+    tier: 2,
+    category: 'processed',
+    icon: 'battery-charging',
+    desc: '通过微观约束场将普通能量电池加压封装，蓄能密度提升十倍。',
+    inputs: { energy_cell: 2, alloy: 1, crystal: 5 },
+    output: { id: 'plasma_battery', name: '等离子压缩电池', quantity: 1 },
+    days: 4,
+    requiredBuilding: 'quantum_assembler',
+  },
+
+  // ===== 3级终极深度加工（由奇迹铸造厂生产） =====
+  {
+    id: 'stellar_beacon_core',
+    name: '恒星信标核心',
+    tier: 3,
+    category: 'goods',
+    icon: 'sparkles',
+    desc: '融合量子运算矩阵与等离子压缩电池的终极工艺奇迹，能向全银河广播文明回响。',
+    inputs: { quantum_matrix: 1, plasma_battery: 1, energy: 20 },
+    output: { id: 'stellar_beacon_core', name: '恒星信标核心', quantity: 1 },
+    days: 6,
+    requiredBuilding: 'miracle_foundry',
+  },
 ];
 
 export function getProductionRecipe(id) {
-  return PRODUCTION_RECIPES.find((recipe) => recipe.id === id) || null;
+  // 先查预置配方，再查 AI 动态生成的挂载配方
+  const preset = PRODUCTION_RECIPES.find((recipe) => recipe.id === id);
+  if (preset) return preset;
+  if (typeof window !== 'undefined' && window.__DYNAMIC_RECIPES__) {
+    return window.__DYNAMIC_RECIPES__.find((recipe) => recipe.id === id) || null;
+  }
+  return null;
 }
 
 export function getQuality(score) {

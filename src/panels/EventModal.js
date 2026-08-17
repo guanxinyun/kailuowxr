@@ -21,7 +21,20 @@ const EFFECT_NAMES = {
 };
 
 export function triggerHardcodedEvent() {
+  const triggeredIds = new Set((gameState.state.eventLog || []).map((e) => e.eventId).filter(Boolean));
+
+  // 1. 优先检查是否有未触发的初始教程剧情事件（按天数顺序推进）
+  const pendingTutorial = EVENTS.find(
+    (e) => e.tutorial && gameState.state.day >= e.minDay && !triggeredIds.has(e.id)
+  );
+  if (pendingTutorial) {
+    showEventModal(pendingTutorial);
+    return;
+  }
+
+  // 2. 否则按权重抽取常规事件
   const eligible = EVENTS.filter(e =>
+    !e.tutorial &&
     gameState.state.day >= e.minDay &&
     (!e.unlockRegion || !gameState.state.unlockedRegions.includes(e.unlockRegion))
   );
@@ -169,5 +182,5 @@ export function showEventModal(event) {
   container.appendChild(choices);
 
   const content = ui.createModalContent(event.name, event.icon, container);
-  ui.openModal(content, 'modal-md');
+  ui.openModal(content, 'modal-md', { priority: 10 });
 }

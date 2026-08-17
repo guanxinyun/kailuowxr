@@ -6,7 +6,7 @@ import { ui } from '../core/UIManager.js';
 import { createElement, lucideIcon } from '../core/utils.js';
 import { TILE_TYPES } from '../data/gamedata.js';
 import { BALANCE } from '../data/balance.js';
-import { getExplorableBlocks, getAvailableResidents, startBlockExploration, applyChallengeRewards } from '../core/BlockExplorationSystem.js';
+import { getExplorableBlocks, getAvailableResidents, startBlockExploration, applyChallengeRewards, getBlockExplorationInitialCost, getBlockExplorationMonthlyFee } from '../core/BlockExplorationSystem.js';
 import { aiClient } from '../ai/AIClient.js';
 import { buildBlockEventFacts, getNarrationFallback } from '../core/AIContentFacts.js';
 import { showCardGameModal } from './CardGameModal.js';
@@ -20,9 +20,10 @@ export function openBlockDispatchModal(bx, by) {
   }
   const available = getAvailableResidents();
   const selected = new Set();
-  const cost = BALANCE.blockExploration.costCredits;
 
   const container = createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '12px' } });
+
+  const savedProgress = gameState.state.pausedBlockProgress?.[`${bx}_${by}`];
 
   container.appendChild(createElement('div', {
     style: { display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--text-secondary)' },
@@ -30,6 +31,16 @@ export function openBlockDispatchModal(bx, by) {
     lucideIcon('map', 16),
     document.createTextNode(` 区块 (${bx},${by}) · ${TILE_TYPES[block.tileType]?.name || '未知'} · 已探明 ${block.exploredCount}/${block.totalCount} 地块`),
   ]));
+
+  if (savedProgress) {
+    container.appendChild(createElement('div', {
+      style: { fontSize: '12px', color: 'var(--color-knowledge)', padding: '6px 8px', borderRadius: '6px', background: 'rgba(74,144,217,0.1)', border: '1px solid rgba(74,144,217,0.3)' }
+    }, [`📌 已保留此前勘探断点：还剩 ${savedProgress.remainingDays} / ${savedProgress.totalDays} 天，重新派遣后将无缝承接原进度！`]));
+  } else {
+    container.appendChild(createElement('div', {
+      style: { fontSize: '12px', color: 'var(--text-dim)', padding: '6px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.03)' }
+    }, ['⏳ 深度勘探：探索周期约 1~3 个月，每月将按人数扣缴一次维持经费。若经费不足队员将全员安全撤回并保留断点进度，下次可继续探索。']));
+  }
 
   const list = createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } });
   if (available.length === 0) {
@@ -54,11 +65,15 @@ export function openBlockDispatchModal(bx, by) {
   container.appendChild(list);
 
   const footer = createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px' } });
-  const costEl = createElement('span', { style: { fontSize: '13px', color: 'var(--text-accent)' } });
+  const costEl = createElement('div', { style: { fontSize: '12px', color: 'var(--text-accent)' } });
   const confirmBtn = createElement('button', { className: 'btn btn-primary' }, [lucideIcon('send', 14), document.createTextNode(' 派遣')]);
   function updateFooter() {
     const count = selected.size;
-    costEl.textContent = count > 0 ? `花费 ${cost} 星币 · ${count} 人` : `花费 ${cost} 星币`;
+    const initialCost = getBlockExplorationInitialCost(count || 1);
+    const monthlyFee = getBlockExplorationMonthlyFee(count || 1);
+    costEl.innerHTML = count > 0
+      ? `初始经费: <strong>${initialCost}</strong> 🪙<br><span style="color:var(--text-dim)">月度维持: ${monthlyFee} 🪙/月 (${count}人)</span>`
+      : '请选择队员';
     confirmBtn.disabled = count === 0;
   }
   confirmBtn.addEventListener('click', () => {
@@ -138,7 +153,7 @@ export function showBlockEventModal(outcome) {
   container.appendChild(confirmBtn);
 
   const content = ui.createModalContent('探索事件', outcome.good ? 'sparkles' : 'wind', container);
-  ui.openModal(content, 'modal-sm');
+  ui.openModal(content, 'modal-sm', { priority: 10 });
 
   gameState.recordEvent({
     category: 'exploration',

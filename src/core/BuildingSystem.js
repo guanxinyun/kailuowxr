@@ -19,11 +19,44 @@ export function getBuildingLevel(building) {
 }
 
 export function getBuildingEfficiency(building) {
-  return 1 + (getBuildingLevel(building) - 1) * 0.25;
+  let eff = 1 + (getBuildingLevel(building) - 1) * 0.25;
+
+  // 景观建筑光环计算（生态观景塔加速农场，音乐喷泉加速工坊/工业）
+  if (gameState.state?.buildings) {
+    const data = getBuildingById(building.buildingId);
+    const category = data?.category;
+
+    for (const other of gameState.state.buildings) {
+      if (!other.built) continue;
+      const otherData = getBuildingById(other.buildingId);
+      if (!otherData) continue;
+
+      const dist = Math.max(Math.abs(other.x - building.x), Math.abs(other.y - building.y));
+
+      // 生态观景塔：周围4格内农场/食物类生产速度+30%
+      if (otherData.effect?.farmAuraRadius && dist <= otherData.effect.farmAuraRadius) {
+        if (category === 'food' || building.buildingId === 'hydro_farm' || building.buildingId === 'greenhouse') {
+          eff *= (1 + (otherData.effect.farmAuraSpeed || 0.30));
+        }
+      }
+
+      // 引力漂浮音乐喷泉：周围4格内工坊与加工生产速度+25%
+      if (otherData.effect?.workshopAuraRadius && dist <= otherData.effect.workshopAuraRadius) {
+        if (building.buildingId === 'workshop' || category === 'basic' || category === 'science') {
+          eff *= (1 + (otherData.effect.workshopAuraSpeed || 0.25));
+        }
+      }
+    }
+  }
+
+  return eff;
 }
 
 export function requiresRoadConnection(building) {
-  return building.buildingId !== 'landing_pad' && building.buildingId !== 'road';
+  if (building.buildingId === 'landing_pad' || building.buildingId === 'road') return false;
+  const data = getBuildingById(building.buildingId);
+  if (data?.noRoadRequired || data?.category === 'scenery') return false;
+  return true;
 }
 
 /** 今日是否为工作日在岗日（每周 workDays 天工作、其余休息） */
@@ -203,7 +236,11 @@ export function getDispatchedResidents(state = gameState.state) {
 
 /**
  * 自动为需要工人的建筑分配居民（每个建筑一名，被派遣探索的居民不可工作）。
- * 居民随机分配，产出建筑优先，搬运建筑次之。返回需要工人的建筑总数（用于展示缺口）。
+ * 优化调度防饥饿机制：
+ * 1. 工坊（有正在加工任务队列）拥有最高工人优先级，防止工坊断工。
+ * 2. 玩家手动标记 `priority: true` 的设施优先分配。
+ * 3. 产出设施若储备已满，优先级降低，让位给有生产空间的设施与搬运工。
+ * 4. 搬运建筑在有已满/待搬运设施时提高优先级。
  */
 export function assignWorkers() {
   const state = gameState.state;
@@ -213,31 +250,69 @@ export function assignWorkers() {
 
   for (const building of buildings) delete building.workerId;
 
-  // 随机洗牌可用居民，实现随机分配
+  // 可用居民池
   const pool = residents.filter((r) => !dispatched.has(r.id));
+  if (!pool.length) return buildings.filter((b) => b.built && (requiresWorker(b) || requiresHauler(b))).length;
+
+  // 洗牌居民
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
 
+  // 评估每个建筑的劳动力紧迫度权重
+  const candidates = [];
+  const hasQueue = (state.production?.queue?.length || 0) > 0;
+
+  for (const b of buildings) {
+    if (!b.built) continue;
+    const isWorker = requiresWorker(b);
+    const isHauler = requiresHauler(b);
+    if (!isWorker && !isHauler) continue;
+
+    let priorityScore = 10;
+    if (b.priority) priorityScore += 50;
+
+    // 工坊且有加工任务
+    if (b.buildingId === 'workshop' && hasQueue) {
+      priorityScore += 100;
+    }
+    // 高级工坊（量子精密合成仪、奇迹铸造厂等）
+    if ((b.buildingId === 'quantum_assembler' || b.buildingId === 'miracle_foundry' || b.buildingId?.startsWith('workshop_')) && hasQueue) {
+      priorityScore += 120;
+    }
+
+    // 检查储备状态
+    const buffer = b.buffer || {};
+    const totalBuffer = typeof buffer === 'object' ? Object.values(buffer).reduce((sum, v) => sum + (Number(v) || 0), 0) : Number(buffer) || 0;
+    const capacity = BALANCE.buildingBuffer?.capacity ?? 5;
+
+    if (isWorker) {
+      if (totalBuffer >= capacity) {
+        // 储备满了，没搬走前产出停滞，降低工人紧迫度
+        priorityScore -= 8;
+      } else {
+        priorityScore += (capacity - totalBuffer) * 2;
+      }
+    } else if (isHauler) {
+      // 搬运站：若周围有设施储备较多，搬运需求大增
+      priorityScore += 15;
+    }
+
+    candidates.push({ building: b, score: priorityScore });
+  }
+
+  // 按权重降序排序分配
+  candidates.sort((a, b) => b.score - a.score);
+
   const used = new Set();
-  // 第一轮：产出建筑优先占人
-  for (const building of buildings) {
-    if (!building.built || !requiresWorker(building)) continue;
+  for (const item of candidates) {
     const resident = pool.find((r) => !used.has(r.id));
     if (resident) {
-      building.workerId = resident.id;
+      item.building.workerId = resident.id;
       used.add(resident.id);
     }
   }
-  // 第二轮：搬运建筑用剩余居民
-  for (const building of buildings) {
-    if (!building.built || !requiresHauler(building)) continue;
-    const resident = pool.find((r) => !used.has(r.id));
-    if (resident) {
-      building.workerId = resident.id;
-      used.add(resident.id);
-    }
-  }
+
   return buildings.filter((building) => building.built && (requiresWorker(building) || requiresHauler(building))).length;
 }

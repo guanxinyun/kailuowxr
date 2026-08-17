@@ -26,6 +26,7 @@ const TILE_COLORS = {
   plains:   { top: '#4A7A3A', sides: '#3D6B30', highlight: '#5C8E4C' },
   mountain: { top: '#8B8B9E', sides: '#6E6E82', highlight: '#A0A0B0', peak: '#C8C8D8' },
   water:    { top: '#3A7ABF', sides: '#2D6AA0', highlight: '#5A9AD8', wave: '#6AB0E8' },
+  river:    { top: '#00d2d3', sides: '#01a3a4', highlight: '#55efc4', wave: '#48dbfb' },
   crystal:  { top: '#7A5AAF', sides: '#6348A0', highlight: '#9A7ACF', gem: '#C8A0F0' },
   metal:    { top: '#7A7A88', sides: '#5E5E6E', highlight: '#9090A0', ore: '#B0A070' },
   ruins:    { top: '#5A5A70', sides: '#484860', highlight: '#707088', stone: '#8888A0' },
@@ -33,6 +34,9 @@ const TILE_COLORS = {
   forest:   { top: '#2E7A3E', sides: '#246830', highlight: '#3E8E50', tree: '#1E6030' },
   snow:     { top: '#D8ECF2', sides: '#A8C8D8', highlight: '#F2FCFF' },
   desert:   { top: '#C88A45', sides: '#9A642F', highlight: '#E8B66A' },
+  hotspring: { top: '#38ada9', sides: '#079992', highlight: '#78e08f', pool: '#60a3bc' },
+  monolith:  { top: '#6a89cc', sides: '#4a69bd', highlight: '#82ccdd', rune: '#fad390' },
+  aurora_canyon: { top: '#00d2d3', sides: '#01a3a4', highlight: '#55efc4', glow: '#a29bfe' },
 };
 
 // 装饰物种子随机
@@ -70,12 +74,21 @@ export class CanvasRenderer {
     // 居民精灵管理器
     this.spriteManager = new ResidentSpriteManager(this.textures);
 
+    // 微粒子系统与收获飘字动效
+    this.particles = [];
+    this.floatingTexts = [];
+
     // 动画时间
     this._time = 0;
     this._lastProcessingPhase = 0;
 
     this._setupEvents();
     this._resize();
+
+    // 监听消费与收获飘字事件
+    bus.on('fx:float-text', ({ x, y, text, color }) => {
+      this.addFloatingText(x, y, text, color);
+    });
 
     bus.on('building:placed', () => { this._terrainDirty = true; this._dynamicDirty = true; });
     bus.on('map:expanded', () => { this._terrainDirty = true; });
@@ -142,14 +155,26 @@ export class CanvasRenderer {
   _setupEvents() {
     const canvas = this.dynamicCanvas;
 
-    // ---- 双指缩放状态 ----
+    // ---- 双指缩放与长按退出放置模式状态 ----
     let pinchStartDist = 0;
     let pinchStartZoom = 1;
+    let longPressTimer = null;
+    let pointerDownPos = null;
     const activePointers = new Map();
+
+    const clearLongPress = () => {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    };
 
     canvas.addEventListener('pointerdown', (e) => {
       activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      pointerDownPos = { x: e.clientX, y: e.clientY };
+
       if (activePointers.size === 2) {
+        clearLongPress();
         // 进入双指模式
         const pts = [...activePointers.values()];
         pinchStartDist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
@@ -158,6 +183,23 @@ export class CanvasRenderer {
         return;
       }
       if (e.button !== 0) return;          // 只响应左键
+
+      // 手机端长按（600ms）取消当前建筑放置模式，防止误触
+      if (gameState.state.placingBuilding && e.pointerType === 'touch') {
+        clearLongPress();
+        longPressTimer = setTimeout(() => {
+          if (gameState.state.placingBuilding) {
+            gameState.set('placingBuilding', null);
+            gameState.addNotification({
+              title: '已取消放置',
+              text: '已退出建筑放置模式',
+              type: 'info',
+              duration: 2000,
+            });
+          }
+        }, 600);
+      }
+
       this.isDragging = true;
       this.dragStart = { x: e.clientX - this.camera.x, y: e.clientY - this.camera.y };
       canvas.setPointerCapture(e.pointerId);
@@ -165,7 +207,17 @@ export class CanvasRenderer {
 
     canvas.addEventListener('pointermove', (e) => {
       activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      // 如果移动超过 8 像素，取消长按判定
+      if (pointerDownPos && longPressTimer) {
+        const moved = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
+        if (moved > 8) {
+          clearLongPress();
+        }
+      }
+
       if (activePointers.size >= 2) {
+        clearLongPress();
         // 双指缩放
         const pts = [...activePointers.values()];
         const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
@@ -197,6 +249,7 @@ export class CanvasRenderer {
     });
 
     canvas.addEventListener('pointerup', (e) => {
+      clearLongPress();
       const wasPinching = activePointers.size >= 2;
       activePointers.delete(e.pointerId);
       if (wasPinching) {
@@ -208,7 +261,7 @@ export class CanvasRenderer {
       if (this.isDragging) {
         const dx = Math.abs(e.clientX - (this.dragStart.x + this.camera.x));
         const dy = Math.abs(e.clientY - (this.dragStart.y + this.camera.y));
-        if (dx < 4 && dy < 4) {
+        if (dx < 6 && dy < 6) {
           this._handleClick(e);
         }
       }
@@ -216,6 +269,7 @@ export class CanvasRenderer {
     });
 
     canvas.addEventListener('pointercancel', (e) => {
+      clearLongPress();
       activePointers.delete(e.pointerId);
       if (activePointers.size < 2) pinchStartDist = 0;
       this.isDragging = false;
@@ -543,6 +597,16 @@ export class CanvasRenderer {
       case 'water':
         this._drawWaterDecor(ctx, x, y, colors);
         break;
+      case 'river':
+        this._drawWaterDecor(ctx, x, y, colors);
+        // 河流动态波纹
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x - 8, y + TILE_H / 2);
+        ctx.lineTo(x + 8, y + TILE_H / 2);
+        ctx.stroke();
+        break;
       case 'mountain':
         this._drawMountainDecor(ctx, x, y, rng, colors);
         break;
@@ -567,6 +631,23 @@ export class CanvasRenderer {
         ctx.strokeStyle = '#E2AA61';
         ctx.lineWidth = 1;
         ctx.beginPath(); ctx.moveTo(x - 12, y + 12); ctx.quadraticCurveTo(x, y + 7, x + 12, y + 12); ctx.stroke();
+        break;
+      case 'hotspring':
+        ctx.fillStyle = '#60a3bc';
+        ctx.beginPath(); ctx.ellipse(x, y + TILE_H / 2, 10, 5, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.fillRect(x - 4, y + TILE_H / 2 - 3, 8, 1);
+        break;
+      case 'monolith':
+        ctx.fillStyle = '#4a69bd';
+        ctx.fillRect(x - 3, y + TILE_H / 2 - 8, 6, 12);
+        ctx.fillStyle = '#fad390';
+        ctx.fillRect(x - 1, y + TILE_H / 2 - 5, 2, 4);
+        break;
+      case 'aurora_canyon':
+        ctx.strokeStyle = '#55efc4';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x - 10, y + TILE_H / 2 + 2); ctx.lineTo(x + 10, y + TILE_H / 2 - 2); ctx.stroke();
         break;
     }
   }
@@ -861,11 +942,21 @@ export class CanvasRenderer {
   }
 
   /**
-   * 建筑名称标签 — 自定义纹理建筑同样显示（工作中时三状态闪烁变色）
+   * 建筑名称标签 — 自定义纹理建筑同样显示（工作中时三状态闪烁变色，住宅显示入住居民名）
    */
   _drawBuildingName(ctx, x, topY, building) {
     const data = getBuildingById(building.buildingId);
     if (!data) return;
+
+    let displayName = data.name;
+    if (building.buildingId === 'habitat' && building.residentId) {
+      const resident = gameState.state.residents?.find((r) => r.id === building.residentId);
+      if (resident) {
+        const stageLabel = (building.level || 1) === 3 ? '★豪华' : (building.level || 1) === 2 ? '舒适' : '';
+        displayName = `${resident.name}的家${stageLabel ? `(${stageLabel})` : ''}`;
+      }
+    }
+
     // 加工中（工坊有队列）→ 绿色闪烁；储备已满（需搬运）→ 琥珀色闪烁
     const isProcessing = building.buildingId === 'workshop' && getProductionState().queue.length > 0;
     const isBufferFull = getBuildingBufferStatus(building).full;
@@ -883,7 +974,18 @@ export class CanvasRenderer {
     ctx.textAlign = 'center';
     ctx.shadowColor = 'rgba(0,0,0,0.8)';
     ctx.shadowBlur = 3;
-    ctx.fillText(data.name, x, topY);
+    // 工作状态提示标签（缺人 / 缺料 / 休息 / 搬运）
+    const op = getBuildingOperationalState(building);
+    let statusBadge = '';
+    if (!op.operational && building.built) {
+      if (op.reason === '需要居民进入工作') statusBadge = ' 👤缺工';
+      else if (op.reason === '居民休息日') statusBadge = ' 💤轮休';
+      else if (op.reason.includes('缺')) statusBadge = ' 📦缺料';
+    } else if (building.priority) {
+      statusBadge = ' ⭐优先';
+    }
+
+    ctx.fillText(displayName + statusBadge, x, topY);
     ctx.shadowBlur = 0;
   }
 
@@ -984,12 +1086,16 @@ export class CanvasRenderer {
   }
 
   // ===== 动态层渲染 =====
-  _renderDynamic() {    const ctx = this.dynamicCtx;
+  _renderDynamic() {
+    const ctx = this.dynamicCtx;
     ctx.clearRect(0, 0, this.width, this.height);
 
     ctx.save();
     ctx.translate(this.camera.x, this.camera.y);
     ctx.scale(this.camera.zoom, this.camera.zoom);
+
+    // 渲染微粒子与飘字
+    this._updateAndRenderParticles(ctx);
 
     // 渲染居民精灵
     this.spriteManager.render(ctx, this.camera.zoom);
@@ -1160,6 +1266,141 @@ export class CanvasRenderer {
     this._terrainDirty = true;
     this._dynamicDirty = true;
     this._heatmapDirty = true;
+  }
+
+  /**
+   * 添加飘字特效（金币/收获）
+   */
+  addFloatingText(gridX, gridY, text, color = '#F1C40F') {
+    const iso = gridToIso(gridX, gridY, TILE_W, TILE_H);
+    this.floatingTexts.push({
+      x: iso.x,
+      y: iso.y - 15,
+      vy: -0.6,
+      text,
+      color,
+      life: 0,
+      maxLife: 60, // 约1秒
+    });
+  }
+
+  /**
+   * 更新与渲染微粒子系统（工坊烟圈、温室光斑、研究所脉冲）与飘字
+   */
+  _updateAndRenderParticles(ctx) {
+    const buildings = gameState.state.buildings || [];
+
+    // 1. 定期根据建筑运营状态生成微粒子（每隔几帧）
+    if (Math.random() < 0.3) {
+      for (const b of buildings) {
+        if (!b.built) continue;
+        const iso = gridToIso(b.x, b.y, TILE_W, TILE_H);
+
+        // 工坊/采矿站：工作烟圈 (smoke)
+        if ((b.buildingId === 'workshop' || b.buildingId === 'mine') && Math.random() < 0.4) {
+          this.particles.push({
+            x: iso.x + (Math.random() - 0.5) * 6,
+            y: iso.y - 18,
+            vx: (Math.random() - 0.5) * 0.3,
+            vy: -0.4 - Math.random() * 0.3,
+            size: 2 + Math.random() * 2,
+            growth: 0.05,
+            color: 'rgba(200, 210, 225, 0.6)',
+            life: 0,
+            maxLife: 50,
+            type: 'smoke',
+          });
+        }
+
+        // 水培温室/农场：绿色生命光斑 (sparkle)
+        if ((b.buildingId === 'hydro_farm' || b.buildingId === 'greenhouse') && Math.random() < 0.3) {
+          this.particles.push({
+            x: iso.x + (Math.random() - 0.5) * 16,
+            y: iso.y - 5 + (Math.random() - 0.5) * 10,
+            vx: (Math.random() - 0.5) * 0.2,
+            vy: -0.2 - Math.random() * 0.2,
+            size: 1.5 + Math.random() * 1.5,
+            color: 'rgba(100, 255, 140, 0.8)',
+            life: 0,
+            maxLife: 40,
+            type: 'sparkle',
+          });
+        }
+
+        // 研究所/巨石阵：科技蓝微光 (pulse)
+        if ((b.buildingId === 'lab' || b.buildingId === 'observatory') && Math.random() < 0.2) {
+          this.particles.push({
+            x: iso.x + (Math.random() - 0.5) * 12,
+            y: iso.y - 12 + (Math.random() - 0.5) * 8,
+            vx: (Math.random() - 0.5) * 0.1,
+            vy: -0.3,
+            size: 1.5,
+            color: 'rgba(120, 180, 255, 0.85)',
+            life: 0,
+            maxLife: 45,
+            type: 'pulse',
+          });
+        }
+      }
+    }
+
+    // 2. 渲染与更新粒子
+    for (let i = this.particles.length - 1; i >= 0; i--) {
+      const p = this.particles[i];
+      p.life++;
+      p.x += p.vx;
+      p.y += p.vy;
+      if (p.growth) p.size += p.growth;
+
+      const progress = p.life / p.maxLife;
+      const alpha = Math.max(0, 1 - progress);
+
+      ctx.save();
+      if (p.type === 'smoke') {
+        ctx.fillStyle = `rgba(220, 225, 235, ${alpha * 0.45})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (p.type === 'sparkle') {
+        ctx.fillStyle = `rgba(120, 255, 150, ${alpha * 0.8})`;
+        ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+      } else if (p.type === 'pulse') {
+        ctx.fillStyle = `rgba(130, 190, 255, ${alpha * 0.9})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      if (p.life >= p.maxLife) {
+        this.particles.splice(i, 1);
+      }
+    }
+
+    // 3. 渲染与更新飘字 (Floating Texts)
+    for (let i = this.floatingTexts.length - 1; i >= 0; i--) {
+      const ft = this.floatingTexts[i];
+      ft.life++;
+      ft.y += ft.vy;
+
+      const progress = ft.life / ft.maxLife;
+      const alpha = Math.max(0, 1 - progress);
+
+      ctx.save();
+      ctx.font = 'bold 11px "Noto Sans SC"';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = ft.color.startsWith('#')
+        ? `rgba(${parseInt(ft.color.slice(1, 3), 16)}, ${parseInt(ft.color.slice(3, 5), 16)}, ${parseInt(ft.color.slice(5, 7), 16)}, ${alpha})`
+        : ft.color;
+      ctx.shadowColor = `rgba(0, 0, 0, ${alpha * 0.8})`;
+      ctx.shadowBlur = 4;
+      ctx.fillText(ft.text, ft.x, ft.y);
+      ctx.restore();
+
+      if (ft.life >= ft.maxLife) {
+        this.floatingTexts.splice(i, 1);
+      }
+    }
   }
 
   // 工具函数：颜色加亮

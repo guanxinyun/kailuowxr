@@ -71,10 +71,12 @@ const DEFAULT_STATE = {
   // 探索与卡牌
   exploredRegions: [],
   activeExploration: null,
+  pausedExplorationProgress: {}, // 欠费撤退保存的区域考察断点进度 { [regionId]: { remainingDays, totalDays, isRandom, randomExpeditionData } }
   unlockedRegions: ['nearby_caves'],
   randomExpedition: null,       // 当前可用的随机考察任务
   mapExpansion: { count: 0 },
-  blockExplorations: [],        // 区块探索任务 { id, bx, by, residentIds, totalDays, remainingDays, events }
+  blockExplorations: [],        // 进行中的区块探索任务 { id, bx, by, residentIds, totalDays, remainingDays, events }
+  pausedBlockProgress: {},      // 欠费撤退保存的区块探索断点进度 { [`${bx}_${by}`]: { totalDays, remainingDays, events } }
   blueprints: { buildings: [], products: [] }, // 探索获得的建筑/加工品图纸
   cards: { unlocked: [] },      // 玩家解锁的通用技能卡牌 ID 列表
 
@@ -113,11 +115,21 @@ const DEFAULT_STATE = {
   aiContent: {
     enabled: true,
     pending: [],
+    researchSlots: [], // 正在进行立项研发的 AI 提案 { id, type, instruction, remainingDays, totalDays, cost: { research: 30, credits: 50 } }
     acceptedBuildings: [],
     acceptedCombos: [],
     acceptedSpecies: [],
+    acceptedTechs: [],
+    acceptedCards: [],
+    generatedComboEvents: [], // AI 现场生成的奇遇事件沉淀池
     lastGeneratedDay: {},
     triggers: { milestones: [], shortages: {}, lastTriggered: {} },
+  },
+
+  // 游戏体验与频率设置（支持存档与实时调节）
+  settings: {
+    pauseOnModal: true,         // 弹出弹窗时自动暂停时间
+    eventFrequencyMultiplier: 1.0, // 事件发生频率倍率 (0.2 ~ 2.0，默认 1.0)
   },
 };
 
@@ -206,7 +218,7 @@ class GameState {
    */
   recordEvent(entry) {
     const MAX_EVENT_LOG = 200;
-    const record = { day: this._state.day, year: this._state.year, ...entry };
+    const record = { day: this._state.day, year: this._state.year, eventId: entry.meta?.eventId, ...entry };
     this._state.eventLog.push(record);
     if (this._state.eventLog.length > MAX_EVENT_LOG) {
       this._state.eventLog = this._state.eventLog.slice(-MAX_EVENT_LOG);
@@ -259,6 +271,8 @@ class GameState {
       if (loaded.storage.credits == null) loaded.storage.credits = Infinity;
       loaded.exploredRegions = Array.isArray(loaded.exploredRegions) ? loaded.exploredRegions : [];
       loaded.activeExploration = loaded.activeExploration || null;
+      loaded.pausedExplorationProgress = loaded.pausedExplorationProgress || {};
+      loaded.pausedBlockProgress = loaded.pausedBlockProgress || {};
       loaded.unlockedRegions = Array.isArray(loaded.unlockedRegions)
         ? loaded.unlockedRegions
         : ['nearby_caves', ...(loaded.exploredRegions || [])];

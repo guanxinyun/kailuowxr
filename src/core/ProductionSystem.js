@@ -8,6 +8,7 @@ import { addResidentExperience } from './ResidentGrowthSystem.js';
 import { aiClient } from '../ai/AIClient.js';
 import { buildProductFacts, getNarrationFallback } from './AIContentFacts.js';
 import { BALANCE } from '../data/balance.js';
+import { getColonyStorageStats, dispatchItemToStorage, extractItemFromStorage } from './StorageSystem.js';
 
 function averageEngineering() {
   const residents = gameState.state.residents || [];
@@ -15,15 +16,27 @@ function averageEngineering() {
   return residents.reduce((sum, resident) => sum + (resident.skills?.engineering || 1), 0) / residents.length;
 }
 
-export function getOperationalWorkshops() {
-  return gameState.state.buildings.filter((building) =>
-    building.buildingId === 'workshop' && getBuildingOperationalState(building).operational
-  );
+export function getOperationalWorkshops(requiredBuilding = null) {
+  const targetId = requiredBuilding || 'workshop';
+  return gameState.state.buildings.filter((building) => {
+    if (!getBuildingOperationalState(building).operational) return false;
+    if (requiredBuilding) {
+      return building.buildingId === requiredBuilding;
+    }
+    // 默认判断：包含综合工坊以及高级专属工坊
+    return (
+      building.buildingId === 'workshop' ||
+      building.buildingId === 'quantum_assembler' ||
+      building.buildingId === 'miracle_foundry' ||
+      building.buildingId.startsWith('workshop_')
+    );
+  });
 }
 
-function getQualityScore() {
+function getQualityScore(requiredBuilding = 'workshop') {
   const engineering = averageEngineering();
-  const workshopQuality = getOperationalWorkshops().reduce((sum, building) => sum + 12 * getBuildingEfficiency(building), 0);
+  const workshops = getOperationalWorkshops(requiredBuilding);
+  const workshopQuality = workshops.reduce((sum, building) => sum + 12 * getBuildingEfficiency(building), 0);
   return Math.min(100, Math.round((engineering - 1) * 8 + workshopQuality + getComboBonus('production_quality')));
 }
 
@@ -49,8 +62,10 @@ export function getInventoryQuantity(productId) {
   return getInventoryEntry(productId).quantity;
 }
 
-export function getEstimatedProductionQuality() {
-  return getQuality(getQualityScore());
+export function getEstimatedProductionQuality(recipeId = null) {
+  const recipe = recipeId ? getProductionRecipe(recipeId) : null;
+  const targetBuilding = recipe?.requiredBuilding || 'workshop';
+  return getQuality(getQualityScore(targetBuilding));
 }
 
 export function canStartProduction(recipeId) {
@@ -60,8 +75,20 @@ export function canStartProduction(recipeId) {
   if (recipe.requiresBlueprint && !(gameState.state.blueprints?.products || []).includes(recipeId)) {
     return { ok: false, reason: '需要先获得加工品图纸' };
   }
-  if (getOperationalWorkshops().length <= 0) return { ok: false, reason: '需要先建造综合工坊' };
+  const targetBuilding = recipe.requiredBuilding || 'workshop';
+  const targetBuildingData = getBuildingById(targetBuilding);
+  const targetBuildingName = targetBuildingData?.name || '指定工坊';
+  if (getOperationalWorkshops(targetBuilding).length <= 0) {
+    return { ok: false, reason: `需要先建造并运营【${targetBuildingName}】` };
+  }
   if (production.queue.length >= 3) return { ok: false, reason: '生产队列已满' };
+
+  // 检查仓储是否已全满
+  const storageStats = getColonyStorageStats();
+  if (storageStats.freeSpace <= 0) {
+    return { ok: false, reason: '殖民地仓储空间已满，无法容纳新产出' };
+  }
+
   for (const [resource, amount] of Object.entries(recipe.inputs)) {
     const available = gameState.state.resources[resource] ?? getInventoryQuantity(resource);
     if (available < amount) return { ok: false, reason: `${resource} 不足` };
@@ -79,20 +106,27 @@ export function startProduction(recipeId) {
     .map((resource) => getInventoryEntry(resource).qualityScore);
 
   for (const [resource, amount] of Object.entries(recipe.inputs)) {
-    if (resource in gameState.state.resources) gameState.addResource(resource, -amount);
-    else addInventory(resource, -amount);
+    if (resource in gameState.state.resources) {
+      gameState.addResource(resource, -amount);
+      extractItemFromStorage(resource, amount);
+    } else {
+      addInventory(resource, -amount);
+      extractItemFromStorage(resource, amount);
+    }
   }
 
   const inheritedQuality = ingredientScores.length
     ? ingredientScores.reduce((sum, score) => sum + score, 0) / ingredientScores.length * 0.35
     : 0;
+  const targetBuilding = recipe.requiredBuilding || 'workshop';
   const job = {
     id: `job_${gameState.state.day}_${production.completed + production.queue.length + 1}`,
     recipeId,
+    requiredBuilding: targetBuilding,
     startedDay: gameState.state.day,
     remainingDays: recipe.days,
     totalDays: recipe.days,
-    qualityScore: Math.min(100, Math.round(getQualityScore() + inheritedQuality)),
+    qualityScore: Math.min(100, Math.round(getQualityScore(targetBuilding) + inheritedQuality)),
   };
   production.queue.push(job);
   bus.emit('production:started', job);
@@ -102,14 +136,17 @@ export function startProduction(recipeId) {
 export function updateProductionSystem() {
   const production = getProductionState();
   if (!production.queue.length) return;
-  const workshops = getOperationalWorkshops();
-  if (!workshops.length) return;
-  const bestWorkshopEfficiency = Math.max(...workshops.map(getBuildingEfficiency));
-  const engineeringBonus = Math.max(1, 1 + (averageEngineering() - 1) * 0.04)
-    * bestWorkshopEfficiency
-    * getComboMultiplier('production_speed');
 
   for (const job of [...production.queue]) {
+    const targetBuilding = job.requiredBuilding || 'workshop';
+    const workshops = getOperationalWorkshops(targetBuilding);
+    if (!workshops.length) continue;
+
+    const bestWorkshopEfficiency = Math.max(...workshops.map(getBuildingEfficiency));
+    const engineeringBonus = Math.max(1, 1 + (averageEngineering() - 1) * 0.04)
+      * bestWorkshopEfficiency
+      * getComboMultiplier('production_speed');
+
     job.remainingDays -= engineeringBonus;
     if (job.remainingDays > 0) continue;
     const recipe = getProductionRecipe(job.recipeId);
@@ -119,6 +156,8 @@ export function updateProductionSystem() {
     }
     const quality = getQuality(job.qualityScore);
     addInventory(recipe.output.id, recipe.output.quantity, job.qualityScore);
+    dispatchItemToStorage(recipe.output.id, recipe.output.quantity);
+
     production.completed++;
     production.queue = production.queue.filter((entry) => entry !== job);
     const engineer = [...gameState.state.residents]

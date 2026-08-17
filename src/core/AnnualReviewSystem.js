@@ -41,17 +41,27 @@ export function calculateAnnualReview() {
 
   const average = Object.values(scores).reduce((sum, score) => sum + score, 0) / 6;
   const grade = average >= 9 ? 'S' : average >= 7.5 ? 'A' : average >= 6 ? 'B' : average >= 4 ? 'C' : 'D';
-  const previousRank = state.annualReview?.rank || 50;
-  const rank = Math.max(1, Math.round(51 - average * 5));
+  // 全银河系5000个殖民地排位体系
+  const baseRank = Math.max(120, Math.round(4800 - (state.year - 1) * 600 - average * 380));
+  const previousRank = state.annualReview?.rank || Math.min(5000, baseRank + 400 + Math.floor(Math.random() * 200));
+  const rank = Math.max(1, Math.min(5000, baseRank));
   const rankDelta = previousRank - rank;
   const strongest = Object.entries(scores).sort((a, b) => b[1] - a[1])[0];
 
-  const awards = [];
-  if (production.completed >= 3 || productQuantity >= 3) awards.push('加工新星');
-  if (combos.discovered.length >= 2) awards.push('布局发现家');
-  if (avgResidentLevel >= 4) awards.push('居民成长伙伴');
-  if (diplomacyAverage >= 30) awards.push('友好殖民地');
-  if (!awards.length) awards.push('勇敢的又一年');
+  // 幽默开罗式年度特色奖项库
+  const FUN_AWARD_POOL = [
+    { cond: production.completed >= 3 || productQuantity >= 4, name: '🏆 全银河草莓味软糖与零件高产地' },
+    { cond: scores.food >= 7.5, name: '🏆 宇宙级干饭示范模范区' },
+    { cond: scores.culture >= 7.0 || diplomacyAverage >= 35, name: '🏆 最佳章鱼星人发呆与度假胜地' },
+    { cond: combos.discovered.length >= 2, name: '🏆 银河美学城市规划金奖' },
+    { cond: avgResidentLevel >= 4, name: '🏆 年度最任劳任怨挥镐先锋奖' },
+    { cond: state.resources.energy <= 5, name: '🏆 宇宙级低碳（常年断电）典范奖' },
+    { cond: state.happiness >= 80, name: '🏆 每天都在傻乐的乐天派殖民地' },
+    { cond: state.exploredRegions.length >= 2, name: '🏆 特种兵式荒野大镖客探险队' },
+  ];
+
+  const awards = FUN_AWARD_POOL.filter((a) => a.cond).map((a) => a.name);
+  if (!awards.length) awards.push('🏆 坚韧不拔又熬过一年的勇敢奖');
 
   const review = {
     year: state.year,

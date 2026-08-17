@@ -19,11 +19,17 @@ export function calculateBuildingDailyOutput(data, building = {}, context = {}) 
   if (!data?.effect || context.operational === false || building.built === false) return {};
   const levelEfficiency = context.levelEfficiency ?? (1 + (Math.max(1, building.level || 1) - 1) * 0.25);
   const globalEfficiency = context.globalEfficiency ?? 1;
+  const buildingId = building.buildingId || data.id;
+  const specificRate = (buildingId && BALANCE.buildingOutputRates?.[buildingId] !== undefined)
+    ? BALANCE.buildingOutputRates[buildingId]
+    : 1.0;
+  const customBaseOutputs = (buildingId && BALANCE.buildingBaseOutputs?.[buildingId]) || {};
   const output = {};
   for (const resource of RESOURCE_KEYS) {
-    const base = Number(data.effect[resource]);
-    if (!Number.isFinite(base) || base === 0) continue;
-    let multiplier = BALANCE.buildingOutputRate * levelEfficiency * globalEfficiency;
+    const rawVal = customBaseOutputs[resource] !== undefined ? customBaseOutputs[resource] : data.effect[resource];
+    const base = Number(rawVal);
+    if (!Number.isFinite(base) || base <= 0) continue;
+    let multiplier = BALANCE.buildingOutputRate * levelEfficiency * globalEfficiency * specificRate;
     if (resource === 'metal' || resource === 'crystal') multiplier *= context.engineeringSkill ?? 1;
     if (resource === 'food') multiplier *= (context.farmingSkill ?? 1) * (context.foodMultiplier ?? 1);
     if (resource === 'energy') multiplier *= context.energyMultiplier ?? 1;
@@ -32,9 +38,13 @@ export function calculateBuildingDailyOutput(data, building = {}, context = {}) 
     multiplier *= typeof context.comboMultiplier === 'function' ? context.comboMultiplier(resource) : 1;
     output[resource] = base * multiplier;
   }
-  if (data.effect.oxygen) output.energy = (output.energy || 0) + data.effect.oxygen * 0.08;
-  if (data.effect.income) output.credits = (output.credits || 0) + data.effect.income * BALANCE.buildingOutputRate * levelEfficiency * globalEfficiency;
-  if (data.effect.trade) output.credits = (output.credits || 0) + 2 * BALANCE.buildingOutputRate * levelEfficiency * globalEfficiency;
+  const oxygenVal = customBaseOutputs.oxygen !== undefined ? customBaseOutputs.oxygen : data.effect.oxygen;
+  if (oxygenVal) output.energy = (output.energy || 0) + oxygenVal * 0.08 * specificRate;
+
+  const incomeVal = customBaseOutputs.income !== undefined ? customBaseOutputs.income : data.effect.income;
+  if (incomeVal) output.credits = (output.credits || 0) + incomeVal * BALANCE.buildingOutputRate * levelEfficiency * globalEfficiency * specificRate;
+
+  if (data.effect.trade) output.credits = (output.credits || 0) + 2 * BALANCE.buildingOutputRate * levelEfficiency * globalEfficiency * specificRate;
   return output;
 }
 

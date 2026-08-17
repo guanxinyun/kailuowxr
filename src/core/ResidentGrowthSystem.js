@@ -76,7 +76,20 @@ export function addResidentExperience(resident, amount, skill = null, reason = '
     const stage = resident.level >= 7 ? 3 : resident.level >= 4 ? 2 : 1;
     if (stage > resident.housingStage) {
       resident.housingStage = stage;
-      resident.growthLog.unshift(`住宅翻修阶段 ${stage} 已解锁`);
+      resident.growthLog.unshift(`住宅翻修阶段 ${stage} 已升级`);
+      // 同步升级专属房屋
+      if (resident.houseId) {
+        const house = gameState.state.buildings.find((b) => b.id === resident.houseId);
+        if (house) {
+          house.level = stage;
+          bus.emit('building:upgraded', { building: house });
+        }
+      }
+      if (!resident.diary) resident.diary = [];
+      const diaryText = stage === 3
+        ? `第${gameState.state.day}天：我的住宅升级为豪华星际别墅！拥有了全景星空天窗与恒温浴缸！`
+        : `第${gameState.state.day}天：居住舱完成扩建翻新，终于有了宽敞的独立工作台与柔软沙发！`;
+      resident.diary.push(diaryText);
       bus.emit('resident:housing-upgraded', { resident, stage });
     }
     levels.push(resident.level);

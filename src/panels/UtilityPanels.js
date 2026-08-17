@@ -12,11 +12,12 @@ import { TEXTURE_SLOTS, getTextureSlotsByCategory } from '../data/textureSlots.j
 import { openCropModal } from './TextureCropModal.js';
 import { openBuildingFaceModal } from './BuildingFaceModal.js';
 import { openSpriteFaceModal } from './SpriteFaceModal.js';
-import { canStartExpedition, startExpedition, generateRandomExpedition } from '../core/ExplorationSystem.js';
+import { canStartExpedition, startExpedition, generateRandomExpedition, getExpeditionInitialCost, getExpeditionMonthlyFee } from '../core/ExplorationSystem.js';
 import { getInventoryQuantity } from '../core/ProductionSystem.js';
 import { saveManager } from '../core/SaveManager.js';
 import { getCurrentDailyResourceFlow, formatDailyRate } from '../core/ResourceFlowSystem.js';
 import { openCardCollectionModal } from './CardCollectionModal.js';
+import { openTuningPanel } from './TuningPanel.js';
 import { sound } from '../core/SoundSystem.js';
 
 // ===== 探索面板 =====
@@ -31,6 +32,7 @@ function formatRewardPool(pool) {
 function renderRegionCard(region, residentId, active, render) {
   const explored = gameState.state.exploredRegions.includes(region.id);
   const validation = canStartExpedition(region.id, residentId);
+  const savedProgress = gameState.state.pausedExplorationProgress?.[region.id];
   const card = createElement('div', { className: `region-card ${explored ? 'explored' : ''}` });
   const iconName = explored ? 'check' : region.isRandom ? 'shuffle' : region.biome === 'snow' ? 'snowflake' : region.biome === 'desert' ? 'sun' : 'compass';
   card.appendChild(createElement('div', { style: { flex: '0 0 32px' } }, [lucideIcon(iconName, 20)]));
@@ -38,6 +40,7 @@ function renderRegionCard(region, residentId, active, render) {
   info.appendChild(createElement('div', { style: { fontWeight: '700', marginBottom: '2px' } }, [
     region.name,
     region.isRandom ? ' ✦' : '',
+    savedProgress ? '（已保留断点进度）' : '',
   ]));
   info.appendChild(createElement('div', { style: { fontSize: '12px', color: 'var(--text-secondary)' } }, [region.desc]));
   // 奖励范围
@@ -45,10 +48,17 @@ function renderRegionCard(region, residentId, active, render) {
   if (pool && !explored) {
     info.appendChild(createElement('div', { style: { fontSize: '11px', color: 'var(--color-food)', marginTop: '2px' } }, [`可能获得：${formatRewardPool(pool)}`]));
   }
-  // 需求
+  // 需求与经费
   const requirements = [];
-  if (region.days) requirements.push(`${region.days}天`);
-  else if (region.distance) requirements.push(`${Math.max(2, region.distance)}天`);
+  if (savedProgress) {
+    requirements.push(`剩余 ${savedProgress.remainingDays} / ${savedProgress.totalDays} 天`);
+  } else if (region.days) {
+    requirements.push(`${region.days}天 (${Math.round(region.days / 30)}个月)`);
+  } else if (region.distance) {
+    requirements.push(`约 ${region.distance * 30} 天`);
+  }
+  requirements.push(`出征 ${getExpeditionInitialCost()}🪙`);
+  requirements.push(`维持 ${getExpeditionMonthlyFee()}🪙/月`);
   if (region.requiredExploration) requirements.push(`探索力${region.requiredExploration}`);
   if (region.requiredSurvival) requirements.push(`生存${region.requiredSurvival}`);
   if (region.supply) requirements.push(`补给 ${getInventoryQuantity(region.supply)}/1`);
@@ -56,7 +66,8 @@ function renderRegionCard(region, residentId, active, render) {
   if (!explored && !validation.ok) info.appendChild(createElement('div', { className: 'exploration-blocked' }, [validation.reason]));
   card.appendChild(info);
   if (!explored && !active) {
-    const button = createElement('button', { className: `btn btn-primary ${validation.ok ? '' : 'is-blocked'}`, title: validation.ok ? '开始考察' : validation.reason }, [lucideIcon('send', 14), document.createTextNode(' 出发')]);
+    const btnText = savedProgress ? ' 继续探索' : ' 出发';
+    const button = createElement('button', { className: `btn btn-primary ${validation.ok ? '' : 'is-blocked'}`, title: validation.ok ? (savedProgress ? '承接此前断点继续探索' : '开始考察') : validation.reason }, [lucideIcon('send', 14), document.createTextNode(btnText)]);
     button.addEventListener('click', () => {
       const result = startExpedition(region.id, residentId);
       if (!result.ok) gameState.addNotification({ title: '无法出发', text: result.reason, type: 'warning', icon: 'info' });
@@ -107,10 +118,15 @@ export function openExplorePanel() {
       const randomExp = gameState.state.randomExpedition;
       const region = active.isRandom ? randomExp : EXPLORE_REGIONS.find(entry => entry.id === active.regionId);
       const resident = gameState.state.residents.find(entry => entry.id === active.residentId);
-      list.appendChild(createElement('div', { className: 'exploration-active' }, [
-        createElement('strong', {}, [`${resident?.name || '居民'}正在考察${region?.name || '未知区域'}`]),
-        createElement('span', {}, [`剩余 ${Math.ceil(active.remainingDays)} / ${active.totalDays} 天`]),
+      const fee = active.costPerMonth || getExpeditionMonthlyFee();
+      const activeCard = createElement('div', { className: 'exploration-active' });
+      activeCard.appendChild(createElement('strong', {}, [
+        `${resident?.name || '居民'}正在考察${region?.name || '未知区域'}`
       ]));
+      activeCard.appendChild(createElement('span', {}, [
+        `进度: 剩余 ${Math.ceil(active.remainingDays)} / ${active.totalDays} 天 · 月度维持: ${fee} 🪙/月`
+      ]));
+      list.appendChild(activeCard);
     }
 
     // 特殊区域（已解锁的）
@@ -158,12 +174,23 @@ export function openExplorePanel() {
     // 进行中的探索（进度条 + 随机事件标记点）
     for (const exp of explorations) {
       const pct = Math.max(0, Math.min(100, Math.round((1 - exp.remainingDays / exp.totalDays) * 100)));
+      const monthlyFee = exp.monthlyFee || (exp.residentIds.length * 20);
       const card = createElement('div', {
-        style: { padding: '10px', borderRadius: '8px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-subtle)', marginBottom: '8px' }
+        style: {
+          padding: '10px', borderRadius: '8px',
+          background: 'rgba(255,255,255,0.03)',
+          border: '1px solid var(--border-subtle)',
+          marginBottom: '8px'
+        }
       });
-      card.appendChild(createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' } }, [
-        lucideIcon('compass', 16),
-        createElement('span', { style: { fontWeight: '600', fontSize: '13px' } }, [`区块 (${exp.bx},${exp.by}) · ${exp.residentIds.length} 人探索中`]),
+      card.appendChild(createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' } }, [
+        createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } }, [
+          lucideIcon('compass', 16),
+          createElement('span', { style: { fontWeight: '600', fontSize: '13px' } }, [
+            `区块 (${exp.bx},${exp.by}) · ${exp.residentIds.length} 人探索中`
+          ]),
+        ]),
+        createElement('span', { style: { fontSize: '12px', color: 'var(--text-dim)' } }, [`维持费: ${monthlyFee} 🪙/月`])
       ]));
       const bar = createElement('div', { style: { position: 'relative', height: '8px', borderRadius: '4px', background: 'rgba(255,255,255,0.08)' } });
       bar.appendChild(createElement('div', { style: { height: '100%', width: `${pct}%`, background: 'var(--color-knowledge)', borderRadius: '4px' } }));
@@ -265,7 +292,7 @@ export function openSettingsPanel() {
   const gameSection = createElement('div', { className: 'settings-section' });
   gameSection.appendChild(createElement('h3', {}, ['游戏']));
 
-  // Volume
+  // Audio Settings (SFX + BGM)
   const sfxSlider = createSlider(Math.round(sound.volume * 100));
   sfxSlider.addEventListener('input', (e) => {
     sound.setVolume(Number(e.target.value) / 100);
@@ -277,8 +304,37 @@ export function openSettingsPanel() {
     if (e.target.checked) sound.play('click');
   });
 
-  gameSection.appendChild(createSettingRow('启用音效', sfxToggle));
+  const bgmSlider = createSlider(Math.round(sound.bgmVolume * 100));
+  bgmSlider.addEventListener('input', (e) => {
+    sound.setBgmVolume(Number(e.target.value) / 100);
+  });
+  const bgmToggle = createToggle(sound.bgmEnabled);
+  bgmToggle.addEventListener('change', (e) => {
+    sound.setBgmEnabled(e.target.checked);
+  });
+
+  gameSection.appendChild(createSettingRow('启用音效 (SFX)', sfxToggle));
   gameSection.appendChild(createSettingRow('音效音量', sfxSlider));
+  gameSection.appendChild(createSettingRow('治愈背景音乐 (BGM)', bgmToggle));
+  gameSection.appendChild(createSettingRow('音乐音量', bgmSlider));
+
+  // 弹窗与事件频率交互设置
+  const pauseOnModalToggle = createToggle(gameState.state.settings?.pauseOnModal !== false);
+  pauseOnModalToggle.addEventListener('change', (e) => {
+    gameState.update('settings', (s = {}) => ({ ...s, pauseOnModal: e.target.checked }));
+  });
+  gameSection.appendChild(createSettingRow('弹窗时自动暂停时间', pauseOnModalToggle));
+
+  const currentFreq = gameState.state.settings?.eventFrequencyMultiplier ?? 1.0;
+  const freqSlider = createSlider(Math.round(currentFreq * 100), 20, 200); // 20% ~ 200%
+  const freqLabel = createElement('span', { style: { fontSize: '11px', color: 'var(--text-accent)', marginLeft: '6px' } }, [`${Math.round(currentFreq * 100)}%`]);
+  freqSlider.addEventListener('input', (e) => {
+    const val = Number(e.target.value) / 100;
+    freqLabel.textContent = `${Math.round(val * 100)}%`;
+    gameState.update('settings', (s = {}) => ({ ...s, eventFrequencyMultiplier: val }));
+  });
+  const freqRow = createSettingRow('随机事件与遭遇频率', createElement('div', { style: { display: 'flex', alignItems: 'center' } }, [freqSlider, freqLabel]));
+  gameSection.appendChild(freqRow);
 
   // Toggle settings
   gameSection.appendChild(createSettingRow('自动保存', createToggle(true)));
@@ -299,6 +355,16 @@ export function openSettingsPanel() {
     }, 300);
   });
   gameSection.appendChild(tutorialBtn);
+
+  // 数值调制模式入口
+  const tuningBtn = createElement('button', { className: 'btn btn-primary', style: { marginTop: '8px', marginLeft: '8px', background: 'linear-gradient(135deg, #f39c12, #e67e22)' } }, [
+    lucideIcon('sliders', 14),
+    document.createTextNode(' 🛠️ 数值调制与 MOD 工坊'),
+  ]);
+  tuningBtn.addEventListener('click', () => {
+    openTuningPanel();
+  });
+  gameSection.appendChild(tuningBtn);
 
   container.appendChild(gameSection);
 

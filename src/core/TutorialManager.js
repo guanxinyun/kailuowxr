@@ -44,9 +44,9 @@ const TUTORIAL_STEPS = [
     waitForEvent: 'building:placed',
   },
   {
-    id: 'tourists',
-    title: '吸引外星游客',
-    text: '建造\"殖民广场\"等文化建筑并用道路连接降落点，就能吸引外星游客来访。游客会消费星币、提升外交好感度！',
+    id: 'starport_and_tourists',
+    title: '建造星港与接待外星游客',
+    text: '在「特殊」分类中建造\"星际港口\"并连接道路，外星穿梭机才能降落！搭配\"殖民广场\"或\"星尘餐厅\"等商业景观设施，外星游客便会纷至沓来消费星币、提升外交好感度！',
     highlight: null,
     waitForEvent: null,
   },

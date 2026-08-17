@@ -9,7 +9,12 @@ class SoundSystem {
     this.ctx = null;
     this.enabled = true;
     this.volume = 0.4;
+    this.bgmEnabled = true;
+    this.bgmVolume = 0.25;
     this.initialized = false;
+    this.bgmPlaying = false;
+    this.bgmTimer = null;
+    this.bgmStep = 0;
 
     // 从本地存储读取设置
     try {
@@ -18,6 +23,8 @@ class SoundSystem {
         const parsed = JSON.parse(saved);
         if (typeof parsed.enabled === 'boolean') this.enabled = parsed.enabled;
         if (typeof parsed.volume === 'number') this.volume = parsed.volume;
+        if (typeof parsed.bgmEnabled === 'boolean') this.bgmEnabled = parsed.bgmEnabled;
+        if (typeof parsed.bgmVolume === 'number') this.bgmVolume = parsed.bgmVolume;
       }
     } catch {
       // 忽略存储读取异常
@@ -31,6 +38,9 @@ class SoundSystem {
       if (AudioCtx) {
         this.ctx = new AudioCtx();
         this.initialized = true;
+        if (this.bgmEnabled) {
+          this.startBGM();
+        }
       }
     } catch {
       // AudioContext 不可用时静默回退
@@ -42,6 +52,9 @@ class SoundSystem {
     if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume();
     }
+    if (this.bgmEnabled && !this.bgmPlaying) {
+      this.startBGM();
+    }
   }
 
   saveSettings() {
@@ -49,6 +62,8 @@ class SoundSystem {
       localStorage.setItem('stardust_audio_settings', JSON.stringify({
         enabled: this.enabled,
         volume: this.volume,
+        bgmEnabled: this.bgmEnabled,
+        bgmVolume: this.bgmVolume,
       }));
     } catch {
       // 忽略存储写入异常
@@ -63,6 +78,116 @@ class SoundSystem {
   setVolume(val) {
     this.volume = Math.max(0, Math.min(1, Number(val) || 0));
     this.saveSettings();
+  }
+
+  setBgmEnabled(val) {
+    this.bgmEnabled = Boolean(val);
+    this.saveSettings();
+    if (this.bgmEnabled) {
+      this.startBGM();
+    } else {
+      this.stopBGM();
+    }
+  }
+
+  setBgmVolume(val) {
+    this.bgmVolume = Math.max(0, Math.min(1, Number(val) || 0));
+    this.saveSettings();
+  }
+
+  // ==================== 程序化治愈 BGM 旋律引擎 ====================
+  // 开罗/星际暖心轻音乐，五声音阶（C major pentatonic / Lydian 梦幻空灵）
+  startBGM() {
+    if (this.bgmPlaying || !this.bgmEnabled) return;
+    this.bgmPlaying = true;
+    this._scheduleBGMStep();
+  }
+
+  stopBGM() {
+    this.bgmPlaying = false;
+    if (this.bgmTimer) {
+      clearTimeout(this.bgmTimer);
+      this.bgmTimer = null;
+    }
+  }
+
+  _scheduleBGMStep() {
+    if (!this.bgmPlaying || !this.ctx) {
+      this.bgmPlaying = false;
+      return;
+    }
+
+    // 治愈系旋律小节序列（Hz 频率）
+    // C4, D4, E4, G4, A4, B4, C5, D5, E5, G5
+    const SCALE = [261.63, 293.66, 329.63, 392.00, 440.00, 493.88, 523.25, 587.33, 659.25, 783.99];
+    // 8小节循环治愈主旋律
+    const MELODY = [
+      [2, 4, 6], [4, 6, 7], [6, 8, 9], [7, 6, 4],
+      [4, 2, 0], [2, 4, 6], [5, 4, 2], [0, 2, 4],
+    ];
+
+    const currentBar = MELODY[this.bgmStep % MELODY.length];
+    const now = this.ctx.currentTime;
+
+    // 1. 底层温润低音 (Root Bass / Pad)
+    const BASS_ROOTS = [130.81, 164.81, 196.00, 174.61]; // C3, E3, G3, F3
+    const bassFreq = BASS_ROOTS[Math.floor(this.bgmStep / 2) % BASS_ROOTS.length];
+    this._playPadNote(bassFreq, now, 1.8, 0.12 * this.bgmVolume);
+
+    // 2. 灵动音符 (Bell/Chime)
+    currentBar.forEach((noteIdx, i) => {
+      const freq = SCALE[noteIdx % SCALE.length];
+      const noteTime = now + i * 0.45;
+      this._playChimeNote(freq, noteTime, 0.4, 0.15 * this.bgmVolume);
+    });
+
+    this.bgmStep++;
+    // 每 1.8 秒走完一个小节
+    this.bgmTimer = setTimeout(() => {
+      this._scheduleBGMStep();
+    }, 1750);
+  }
+
+  _playChimeNote(freq, startTime, duration, vol) {
+    if (!this.ctx) return;
+    try {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, startTime);
+
+      gain.gain.setValueAtTime(0.001, startTime);
+      gain.gain.linearRampToValueAtTime(vol, startTime + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(startTime);
+      osc.stop(startTime + duration + 0.05);
+    } catch {
+      // 忽略音频调度错误
+    }
+  }
+
+  _playPadNote(freq, startTime, duration, vol) {
+    if (!this.ctx) return;
+    try {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, startTime);
+
+      gain.gain.setValueAtTime(0.001, startTime);
+      gain.gain.linearRampToValueAtTime(vol, startTime + 0.3);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(startTime);
+      osc.stop(startTime + duration + 0.1);
+    } catch {
+      // 忽略音频调度错误
+    }
   }
 
   /**

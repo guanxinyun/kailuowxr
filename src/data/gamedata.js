@@ -2,86 +2,131 @@
  * 星尘殖民地 — 事件 + 物品 + 组合 + 地图瓦片
  */
 
-// ===== 随机事件 =====
+// ===== 随机与教程剧情事件 =====
 export const EVENTS = [
+  // --- 初始教程剧情事件链（开罗风：引导探索、基建、生活与打工人心声） ---
+  {
+    id: 'tutorial_event_1_landing',
+    name: '【快讯】殖民飞船安稳着陆',
+    type: 'discovery',
+    icon: 'rocket',
+    narrative: '弊誌星际特派员报道：殖民飞船已成功迫降！工程组长擦了擦汗表示：“虽然底盘摩擦声有点刺耳，但降落伞好歹打开了！”居民们一边清点行李一边询问何时开饭。',
+    choices: [
+      { text: '发放应急口粮包', effect: { food: 10, happiness: 5 }, result: '居民们嚼着草莓味合成口粮，纷纷表示“只要管饭一切都好说”。' },
+      { text: '立即展开基础采矿勘探', effect: { metal: 15, research: 5 }, result: '大家抄起铁镐热火朝天地敲起了碎石，虽然有人抱怨手腕酸痛。' },
+    ],
+    weight: 100,
+    minDay: 1,
+    tutorial: true,
+  },
+  {
+    id: 'tutorial_event_2_housing',
+    name: '【民生】关于买房与摸鱼的调查',
+    type: 'science',
+    icon: 'home',
+    narrative: '弊誌记者走访发现，居民们对生活品质提出了明确诉求：“每天在帐篷里数外星流星固然浪漫，但如果能有一栋自带恒温浴缸的居住舱就更妙了！”若不及时满足，恐有消极怠工倾向。',
+    choices: [
+      { text: '许诺优先扩建优质居所', effect: { happiness: 6 }, result: '居民们干劲大增，甚至主动把工具箱擦拭得锃亮。' },
+      { text: '分发自热提神热饮', effect: { energy: 10, food: -2 }, result: '热饮效果拔群，大家红着眼睛连夜画出了三张温室设计图。' },
+    ],
+    weight: 90,
+    minDay: 3,
+    tutorial: true,
+  },
+  {
+    id: 'tutorial_event_3_alien_flora',
+    name: '【特产】会掰手腕的异星杏鲍菇',
+    type: 'exploration',
+    icon: 'sprout',
+    narrative: '开拓小队在附近灌木丛中发现了一株突然变异后擅自越狱的野生杏鲍菇，据说它刚刚在生态区腕力大赛中荣获了亚军。队员们正围着它啧啧称奇。',
+    choices: [
+      { text: '带回水培实验室培育', effect: { research: 8, food: 6 }, result: '实验室成功提取了高能营养因子，杏鲍菇表示在培养槽里过得很惬意。' },
+      { text: '与它握手并拍照留念', effect: { culture: 4, happiness: 5 }, result: '合影被裱起来挂在降落点外墙，成为了殖民地的首个特色景点。' },
+    ],
+    weight: 80,
+    minDay: 5,
+    tutorial: true,
+  },
+
+  // --- 原生开罗风随机事件 ---
   {
     id: 'meteor_shower',
-    name: '流星雨',
+    name: '【快讯】流星雨突袭与捡漏现场',
     type: 'disaster',
     icon: 'flame',
-    narrative: '深空雷达捕捉到异常信号——一场密集的流星雨正朝殖民地袭来。碎片将在数小时内抵达，你必须做出决定。',
+    narrative: '深空雷达通报：一场高密度流星雨正朝殖民地袭来！不过居民们看起来并不慌张，甚至有人已经提着自制铁桶准备去捡坠落的高能矿石。',
     choices: [
-      { text: '启动护盾全力防御', effect: { energy: -20 }, result: '护盾成功拦截了大部分碎片，但能量储备大幅下降。' },
-      { text: '疏散居民进入避难所', effect: { happiness: -5 }, result: '所有人安全撤离，但一些地表设施受到了损伤。' },
-      { text: '派遣小队收集陨石样本', effect: { crystal: 15, happiness: -3 }, result: '冒险收集到了珍贵的晶体矿物，但有人受了轻伤。' },
+      { text: '启动护盾全力防御', effect: { energy: -20 }, result: '护盾成功弹开了大部分流星碎块，虽然电表走得令人心惊肉跳。' },
+      { text: '疏散居民进安全区', effect: { happiness: -3 }, result: '所有人安全撤离，大家聚在一起吃了顿简易火锅。' },
+      { text: '组织小队去捡发光碎块', effect: { crystal: 15, happiness: -2 }, result: '满载而归！虽然有位队员被飞溅的烫土烧破了裤脚。' },
     ],
     weight: 10,
     minDay: 10,
   },
   {
     id: 'alien_signal',
-    name: '神秘信号',
+    name: '【奇闻】外星邻居的质数电报',
     type: 'discovery',
     icon: 'radio',
-    narrative: '通讯阵列接收到一段重复的电磁信号。信号来自一个未知方向，模式高度规律，不像是自然现象。',
+    narrative: '通讯阵列截获了一段极有规律的脉冲信号。科研所长戴上老花镜严肃分析：“对方似乎是在用质数打拍子，或者是在用摩斯电码点外卖。”',
     choices: [
-      { text: '尝试解码信号', effect: { research: 10 }, result: '经过分析，信号中包含了一组数学常数——这是智慧生命的标志！' },
-      { text: '回复友好信息', effect: { diplomacy: 5 }, result: '你发送了包含质数序列的回复。几天后，信号的模式发生了变化。' },
-      { text: '保持沉默，加强监控', effect: { defense: 3 }, result: '谨慎是明智的。你加强了防御部署，同时继续监听。' },
+      { text: '尝试用数学公式回复', effect: { research: 10 }, result: '回复发送后，对方发来了一串欢快的波形，似乎达成了学术默契！' },
+      { text: '回复友好的星际问候', effect: { diplomacy: 5 }, result: '对方送来了一串由微波绘制的笑脸符号。' },
+      { text: '保持警惕，加固天线', effect: { defense: 3 }, result: '你把天线底座多拧了三颗螺丝，感觉踏实多了。' },
     ],
     weight: 8,
     minDay: 15,
   },
   {
     id: 'crop_mutation',
-    name: '作物变异',
+    name: '【农情】荧光发光作物的奇迹',
     type: 'science',
     icon: 'sprout',
-    narrative: '水培农场中的一批作物出现了意外变异。叶片呈现出奇异的荧光色，生长速度是正常的三倍。',
+    narrative: '水培农场里的一批番茄突然通体发出荧光，生长速度飙升三倍！农场主管兴奋地表示：“以后夜班连路灯电费都省了！”',
     choices: [
-      { text: '隔离研究变异样本', effect: { research: 8, food: -2 }, result: '研究发现变异是由本地微生物引起的，这可能是重大突破。' },
-      { text: '大规模培育变异作物', effect: { food: 10 }, result: '产量大幅提升！但林月华警告说长期安全性还未验证。' },
-      { text: '销毁变异样本，确保安全', effect: { food: -3 }, result: '安全第一。虽然损失了一些产出，但避免了潜在风险。' },
+      { text: '隔离切片深入分析', effect: { research: 8, food: -2 }, result: '研究证实这是一种无害的良性共生，科研成果喜人。' },
+      { text: '作为特产端上餐桌', effect: { food: 12 }, result: '居民们纷纷表示吃完后心情格外明亮，甚至能在黑夜里看书。' },
+      { text: '稳妥处理，制成观赏盆栽', effect: { culture: 4, food: 2 }, result: '发光盆栽大受欢迎，摆满了生活区的各个角落。' },
     ],
     weight: 12,
     minDay: 8,
   },
   {
     id: 'dust_storm',
-    name: '星尘风暴',
+    name: '【气象】星尘微粒大扫除',
     type: 'disaster',
     icon: 'wind',
-    narrative: '一场罕见的星尘风暴正在逼近。细微的星际尘埃可能会损坏太阳能板和精密设备。',
+    narrative: '一场富含稀有金属微粒的星尘风暴掠过地表。空气过滤网被糊得严严实实，维修工提着自来水管叹气道：“这下有的刷了。”',
     choices: [
-      { text: '关闭所有外部设备等待风暴过去', effect: { energy: -15, food: -5 }, result: '风暴持续了两天。设备安全，但生产停滞造成了损失。' },
-      { text: '收集星尘用于研究', effect: { research: 5, crystal: 5 }, result: '冒着风险收集的星尘中含有稀有元素，价值不菲。' },
+      { text: '停机闭门等待风暴停歇', effect: { energy: -12, food: -3 }, result: '风暴过后一切如常，大家拿出扫帚清扫门前沙尘。' },
+      { text: '组织戴防尘面罩抢收粉末', effect: { research: 5, crystal: 6 }, result: '从滤网里刮出了不少值钱的高能微粒，大家都夸维修工立了大功！' },
     ],
     weight: 8,
     minDay: 20,
   },
   {
     id: 'trader_visit',
-    name: '星际商人',
+    name: '【商情】星际游商与神秘推销',
     type: 'trade',
     icon: 'package',
-    narrative: '一艘不明商船出现在轨道上，自称是"星际自由贸易联盟"的成员。他们提出了交易请求。',
+    narrative: '一艘涂满花哨广告的飞船停泊在近地轨道。船长热情地推销：“来自仙女座最高级的棉花与老奶奶智慧结晶，走过路过不要错过！”',
     choices: [
-      { text: '用金属换取稀有晶体', effect: { metal: -30, crystal: 20 }, result: '交易顺利完成。商人留下了一张星图作为赠礼。' },
-      { text: '用食物换取科技数据', effect: { food: -20, research: 15 }, result: '数据包中包含了一些有趣的外星工程方案。' },
-      { text: '婉拒交易，保持警惕', effect: { defense: 2 }, result: '商人平静地离开了。也许下次再来。' },
+      { text: '用富余金属换取晶体', effect: { metal: -30, crystal: 20 }, result: '交易达成！商人还额外赠送了一把号称拧不坏的螺丝刀。' },
+      { text: '用农场鲜果换取技术手册', effect: { food: -20, research: 15 }, result: '换到了一本《三分钟掌握星际微操作技巧》，科研人员如获至宝。' },
+      { text: '礼貌摆手并说“下次一定”', effect: { defense: 2 }, result: '商人耸了耸肩，播放着洗脑的促销音乐飞走了。' },
     ],
     weight: 6,
     minDay: 25,
   },
   {
     id: 'aurora',
-    name: '极光现象',
+    name: '【盛景】极光野餐与大合唱',
     type: 'wonder',
     icon: 'rainbow',
-    narrative: '天空中出现了壮丽的极光——这颗星球的磁场与恒星风相互作用，创造出令人窒息的美景。殖民者们纷纷走出居住舱，仰望这片绚烂的光幕。',
+    narrative: '天空中拉开了绚丽的极光帷幕。居民们自发搬出折叠椅，有人甚至开始弹起土制尤克里里，唱起了荒腔走板的思乡曲。',
     choices: [
-      { text: '组织全体观赏活动', effect: { happiness: 10, culture: 3 }, result: '这是殖民地建立以来最美好的夜晚。每个人都会记住这一刻。' },
-      { text: '利用极光进行科学观测', effect: { research: 8 }, result: '收集到了宝贵的磁场数据，对理解这颗星球大有帮助。' },
+      { text: '举办全员露天茶话会', effect: { happiness: 10, culture: 4 }, result: '虽然有人唱歌跑调跑到邻座星系，但大家的笑声响彻了夜空。' },
+      { text: '架设光谱仪趁机采集数据', effect: { research: 8 }, result: '记录到了罕见的高空带电粒子流，科研笔记又厚了三页。' },
     ],
     weight: 5,
     minDay: 5,
@@ -159,15 +204,15 @@ export const EVENTS = [
   },
   {
     id: 'recruit_wanderer',
-    name: '迷途殖民者',
+    name: '休眠救生舱',
     type: 'exploration',
     icon: 'users',
-    narrative: '探索队在殖民地边缘发现了一艘坠毁的救生舱，舱内是一名陷入休眠的迷途殖民者。他苏醒后表示愿意加入你的殖民地。',
+    narrative: '探索队在殖民地边缘发现了一艘受损的深空救生舱，生命维持系统已处于警戒线，舱内是一名陷入休眠的开拓者。',
     choices: [
-      { text: '欢迎加入殖民地', effect: { recruit: 1 }, result: '新居民正式加入！殖民地又多了一位成员。' },
-      { text: '提供补给，送他离开', effect: { food: -3, happiness: 2 }, result: '你赠予了补给。他道谢后独自踏上旅程，居民们为这份善意感到欣慰。' },
+      { text: '支付 60 星币救治并接纳', effect: { credits: -60, recruit: 1 }, result: '经过悉心医疗唤醒，新开拓者脱离危险并感激地加入了殖民地！' },
+      { text: '提供基础应急能源后送往太空站', effect: { energy: -10, happiness: 2 }, result: '你补充了救生舱能量。虽然未能吸纳人口，但人道关怀让殖民地居民感到踏实。' },
     ],
-    weight: 7,
+    weight: 6,
     minDay: 5,
   },
 ];
@@ -177,6 +222,7 @@ export const TILE_TYPES = {
   plains:    { name: '平原',   color: '#1a2a1a', buildable: true,  icon: null },
   mountain:  { name: '山脉',   color: '#2a2a3a', buildable: false, icon: 'mountain', techUnlock: 'mountain_engineering' },
   water:     { name: '液态湖', color: '#0a1a3a', buildable: false, icon: 'droplets', techUnlock: 'water_engineering' },
+  river:     { name: '流光河', color: '#00d2d3', buildable: false, icon: 'waves', techUnlock: 'water_engineering', attraction: 8 },
   crystal:   { name: '晶矿',   color: '#2a1a3a', buildable: true,  icon: 'gem', resource: 'crystal' },
   metal:     { name: '矿脉',   color: '#2a2a2a', buildable: true,  icon: 'pickaxe', resource: 'metal' },
   ruins:     { name: '遗迹',   color: '#1a1a2a', buildable: false, icon: 'landmark', explorable: true },
@@ -184,15 +230,19 @@ export const TILE_TYPES = {
   forest:    { name: '异星林', color: '#0a2a1a', buildable: true,  icon: 'trees', resource: 'nature' },
   snow:      { name: '寒霜原', color: '#b8d8e8', buildable: true,  icon: 'snowflake', resource: 'ice_core' },
   desert:    { name: '赤沙地', color: '#b87a38', buildable: true,  icon: 'sun', resource: 'sun_crystal' },
+  // ===== 天然奇观/景点地块 =====
+  hotspring: { name: '星光温泉', color: '#48dbfb', buildable: false, icon: 'waves', explorable: true, attraction: 15, scenic: true },
+  monolith:  { name: '异星巨石阵', color: '#a55eea', buildable: false, icon: 'shield-alert', explorable: true, attraction: 18, scenic: true },
+  aurora_canyon: { name: '极光大峡谷', color: '#10ac84', buildable: false, icon: 'mountain-snow', explorable: true, attraction: 20, scenic: true },
 };
 
 /** 地形产出加成：特定建筑在特定地形上的产出乘数 */
 export const TERRAIN_BONUSES = {
   mountain: { mine: 1.5, observatory: 1.4, radar: 1.3 },
-  water:    { hydro_farm: 1.4, algae_reactor: 1.5, solar_panel: 1.2 },
-  crystal:  { crystal_extractor: 1.4 },
+  water:    { hydro_farm: 1.4, algae_reactor: 1.5, solar_panel: 1.2, float_fountain: 1.5 },
+  crystal:  { crystal_extractor: 1.4, holo_wheel: 1.3 },
   metal:    { mine: 1.3 },
-  forest:   { greenhouse: 1.3, hydro_farm: 1.2 },
+  forest:   { greenhouse: 1.3, hydro_farm: 1.2, bio_tower: 1.4 },
 };
 
 // ===== 引力维度配置 =====

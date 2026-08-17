@@ -48,6 +48,32 @@ export const BUILDING_COMBOS = [
     ],
     effectText: '参与设施旅游吸引力 +25%',
   },
+  {
+    id: 'food_and_fun',
+    name: '美食与欢笑大街',
+    icon: 'utensils',
+    buildingIds: ['restaurant', 'amusement_park'],
+    maxDistance: 2,
+    description: '餐厅的美味香气与游乐园的欢声笑语相互交织，吸引大量居民与游客驻足消费。',
+    effects: [
+      { type: 'tourism_attraction', buildingIds: ['restaurant', 'amusement_park'], multiplier: 1.35 },
+      { type: 'building_output', resource: 'credits', multiplier: 1.2 },
+    ],
+    effectText: '餐饮游乐设施吸引力 +35%，消费收益 +20%',
+  },
+  {
+    id: 'green_living_oasis',
+    name: '市民休闲绿洲',
+    icon: 'trees',
+    buildingIds: ['habitat', 'leisure_park'],
+    maxDistance: 2,
+    description: '开门见绿的居住环境大幅提升了居民的日常幸福感与生活品质。',
+    effects: [
+      { type: 'happiness_bonus', bonus: 10 },
+      { type: 'tourism_attraction', buildingIds: ['leisure_park'], multiplier: 1.2 },
+    ],
+    effectText: '殖民地基础幸福度 +10，公园吸引力 +20%',
+  },
 
   // ===== 群落组合（3-5栋） =====
   {
@@ -99,6 +125,19 @@ export const BUILDING_COMBOS = [
       { type: 'tourism_attraction', buildingIds: ['plaza', 'museum', 'concert_hall', 'monument'], multiplier: 1.5 },
     ],
     effectText: '参与设施旅游吸引力 +50%',
+  },
+  {
+    id: 'scenic_wonderland',
+    name: '璀璨星界奇观乐园',
+    icon: 'sparkles',
+    buildingIds: ['holo_wheel', 'bio_tower', 'float_fountain'],
+    maxDistance: 3,
+    description: '全息摩天轮、观景塔与漂浮喷泉构成殖民地最负盛名的人造奇观地标带。',
+    effects: [
+      { type: 'tourism_attraction', buildingIds: ['holo_wheel', 'bio_tower', 'float_fountain'], multiplier: 1.6 },
+      { type: 'building_output', resource: 'credits', multiplier: 1.25 },
+    ],
+    effectText: '奇观设施旅游吸引力 +60%，商业消费收益 +25%',
   },
   {
     id: 'self_sustaining_colony',

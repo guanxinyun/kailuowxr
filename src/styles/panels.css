@@ -1153,6 +1153,338 @@
   margin-left: auto;
 }
 
+/* ---- 尖塔式卡牌战斗与遭遇系统 ---- */
+.spire-battle-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0;
+  user-select: none;
+}
+
+.spire-prebattle-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.spire-deck-builder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  max-height: 380px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.spire-deck-builder-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+}
+
+.spire-deck-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--sp-2);
+}
+
+.spire-deck-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: var(--card-bg, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--card-border, var(--border-subtle));
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  opacity: 0.6;
+}
+
+.spire-deck-card.selected {
+  opacity: 1;
+  border-color: var(--card-text, #4A90D9);
+  box-shadow: 0 0 10px rgba(74, 144, 217, 0.3);
+  transform: translateY(-2px);
+}
+
+.spire-card-cost {
+  font-family: var(--font-mono);
+  font-weight: bold;
+  color: #F1C40F;
+  font-size: 11px;
+}
+
+.spire-card-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin: 6px 0;
+}
+
+.spire-card-source {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.spire-prebattle-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* 战斗阶段战场 */
+.spire-env-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: linear-gradient(90deg, rgba(74, 144, 217, 0.15), rgba(155, 89, 182, 0.15));
+  border-radius: 6px;
+  border: 1px solid rgba(74, 144, 217, 0.3);
+  font-size: 12px;
+}
+
+.spire-arena {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-glow);
+}
+
+.spire-fighter-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.spire-fighter-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.spire-hp-bar {
+  position: relative;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.spire-hp-fill {
+  height: 100%;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.spire-hp-fill.player {
+  background: linear-gradient(90deg, #2ECC71, #27AE60);
+}
+
+.spire-hp-fill.enemy {
+  background: linear-gradient(90deg, #E74C3C, #C0392B);
+}
+
+.spire-hp-text {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: bold;
+  color: #FFF;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.spire-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.spire-block-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  background: rgba(52, 152, 219, 0.2);
+  border: 1px solid rgba(52, 152, 219, 0.5);
+  border-radius: 4px;
+  color: #3498DB;
+  font-weight: bold;
+}
+
+.spire-energy-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  background: rgba(241, 196, 15, 0.2);
+  border: 1px solid rgba(241, 196, 15, 0.5);
+  border-radius: 4px;
+  color: #F1C40F;
+  font-weight: bold;
+}
+
+.spire-intent-bubble {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: bold;
+  animation: spirePulse 1.5s infinite;
+}
+
+.spire-intent-bubble.attack {
+  background: rgba(231, 76, 60, 0.2);
+  border: 1px solid rgba(231, 76, 60, 0.6);
+  color: #E74C3C;
+}
+
+.spire-intent-bubble.defend {
+  background: rgba(74, 144, 217, 0.2);
+  border: 1px solid rgba(74, 144, 217, 0.6);
+  color: #4A90D9;
+}
+
+@keyframes spirePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.02); }
+}
+
+.spire-arena-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.spire-turn-badge {
+  font-size: 11px;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  color: var(--text-dim);
+}
+
+.spire-vs-text {
+  font-family: var(--font-mono);
+  font-weight: 900;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+/* 战斗手牌区 */
+.spire-hand-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+}
+
+.spire-hand-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.spire-hand-cards {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 2px 8px;
+}
+
+.spire-hand-card {
+  min-width: 140px;
+  max-width: 150px;
+  min-height: 130px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: var(--card-bg, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--card-border, var(--border-subtle));
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.spire-hand-card.playable:hover {
+  transform: translateY(-6px);
+  border-color: var(--card-text, #4A90D9);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.spire-hand-card.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(0.4);
+}
+
+.spire-hand-card.special {
+  box-shadow: 0 0 8px rgba(243, 156, 18, 0.4);
+  border-color: #F39C12;
+}
+
+.spire-card-cost-badge {
+  font-family: var(--font-mono);
+  font-weight: bold;
+  color: #F1C40F;
+  background: rgba(241, 196, 15, 0.2);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.spire-card-desc-body {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin: 6px 0;
+}
+
+.spire-card-bottom-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+/* 战斗操作栏 */
+.spire-battle-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--border-subtle);
+}
+
 /* ---- 响应式 ---- */
 @media (max-width: 1200px) {
   :root {

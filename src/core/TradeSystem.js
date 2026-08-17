@@ -113,10 +113,25 @@ export function removeFromShelf(building, productId) {
   return { ok: true };
 }
 
+export function getGlobalPriceBonus() {
+  let bonus = 0;
+  if (!gameState.state?.buildings) return bonus;
+  for (const b of gameState.state.buildings) {
+    if (!b.built) continue;
+    const data = getBuildingById(b.buildingId);
+    if (data?.effect?.globalPriceBonus) {
+      bonus += data.effect.globalPriceBonus;
+    }
+  }
+  return bonus;
+}
+
 /** 游客购买货架商品（由 TouristManager 调用） */
 export function touristBuyFromShelf(building, tourist) {
   if (!building.shopShelf?.length) return 0;
   let totalSpent = 0;
+  const globalBonus = getGlobalPriceBonus();
+
   for (const slot of building.shopShelf) {
     if (slot.stock <= 0) continue;
     // 购买概率 = 满意度 × 0.3
@@ -124,7 +139,8 @@ export function touristBuyFromShelf(building, tourist) {
     if (Math.random() > buyChance) continue;
     const quality = getQuality(slot.qualityScore);
     const priceMultiplier = QUALITY_PRICE_MULTIPLIER[quality.grade] || 1;
-    const price = Math.floor((PRODUCT_PRICES[slot.productId] || 10) * priceMultiplier);
+    const basePrice = PRODUCT_PRICES[slot.productId] || 10;
+    const price = Math.floor(basePrice * priceMultiplier * (1 + globalBonus));
     if (price > (tourist.budget - tourist.spent)) continue;
     slot.stock--;
     tourist.spent += price;

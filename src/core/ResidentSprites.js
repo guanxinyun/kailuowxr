@@ -351,6 +351,28 @@ export class ResidentSprite {
     let targetX, targetY;
     const roll = Math.random();
 
+    // 如果是外星游客，优先根据其当前设定目的地或停留期限状态寻路
+    if (this.isAlien && this.resident) {
+      const tourist = this.resident;
+      const day = gameState.state.day;
+      const isDeparting = tourist.isDeparting || (day >= (tourist.visitDay + tourist.stayDuration));
+
+      if (isDeparting) {
+        // 到期准备离开：寻路前往降落点(landing_pad)
+        const pad = buildings.find(b => b.buildingId === 'landing_pad') || buildings[0];
+        if (pad) {
+          this.navigateTo(map, myX, myY, pad.x, pad.y);
+          return;
+        }
+      } else if (tourist.currentDestination) {
+        const destBuilding = buildings.find(b => b.id === tourist.currentDestination);
+        if (destBuilding) {
+          this.navigateTo(map, myX, myY, destBuilding.x, destBuilding.y);
+          return;
+        }
+      }
+    }
+
     if (buildings.length > 0) {
       if (roll < 0.4) {
         // 40% 去工作建筑（优先自己分配到的岗位）

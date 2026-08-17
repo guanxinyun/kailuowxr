@@ -13,8 +13,9 @@ import { getQuality } from '../data/production.js';
 import { getBuildingEfficiency, getBuildingOperationalState } from './BuildingSystem.js';
 import { getComboMultiplier } from './ComboSystem.js';
 import { aiClient } from '../ai/AIClient.js';
-import { buildTouristFacts, getNarrationFallback } from './AIContentFacts.js';
+import { buildTouristFacts, buildSceneryVisitFacts, getNarrationFallback } from './AIContentFacts.js';
 import { touristBuyFromShelf, getPromotionBonus } from './TradeSystem.js';
+import { triggerComboWonderEvent } from './WonderEventSystem.js';
 import { sound } from './SoundSystem.js';
 
 // 游客名字池（按种族）
@@ -39,18 +40,38 @@ export function updateTouristSystem() {
 
   // 每个游戏日自主访问一个偏好景点；离开时按实际访问经历结算
   updateAutonomousVisits(day);
+
+  // 检查已到期的游客，若刚到期则标记为离境并触发寻路回降落点
+  for (const t of activeTourists) {
+    if (day - t.visitDay >= (t.stayDuration || 5)) {
+      t.isDeparting = true;
+    }
+  }
+
+  // 停留到期且完成离境流程（或宽限1天）离开
   const leaving = activeTourists.filter(t => day - t.visitDay >= (t.stayDuration || 5));
   processTouristDeparture(leaving);
 
-  // 计算旅游吸引力（基于文化类建筑）
+  // 必须拥有已建成并正常运营的【星际港口 (starport)】，外星穿梭机才能降落
+  const hasStarport = buildings.some(b => b.buildingId === 'starport');
+  if (!hasStarport) return;
+
+  // 计算旅游吸引力（基于文化类与景点建筑）
   let tourismAttraction = 0;
   for (const b of buildings) {
     const efficiency = getBuildingEfficiency(b) * getComboMultiplier('tourism_attraction', { buildingId: b.buildingId });
+    if (b.buildingId === 'starport') tourismAttraction += 8 * efficiency;
     if (b.buildingId === 'museum') tourismAttraction += 5 * efficiency;
     if (b.buildingId === 'concert_hall') tourismAttraction += 8 * efficiency;
     if (b.buildingId === 'monument') tourismAttraction += 10 * efficiency;
     if (b.buildingId === 'trade_hub') tourismAttraction += 3 * efficiency;
     if (b.buildingId === 'plaza') tourismAttraction += 2 * efficiency;
+    if (b.buildingId === 'restaurant') tourismAttraction += 6 * efficiency;
+    if (b.buildingId === 'amusement_park') tourismAttraction += 12 * efficiency;
+    if (b.buildingId === 'leisure_park') tourismAttraction += 4 * efficiency;
+    if (b.buildingId === 'holo_wheel') tourismAttraction += 12 * efficiency;
+    if (b.buildingId === 'bio_tower') tourismAttraction += 9 * efficiency;
+    if (b.buildingId === 'float_fountain') tourismAttraction += 8 * efficiency;
   }
 
   // 没有吸引力建筑，不会有游客
@@ -84,17 +105,17 @@ export function updateTouristSystem() {
     const names = TOURIST_NAMES[speciesId] || ['访客'];
     const name = names[Math.floor(Math.random() * names.length)] + Math.floor(Math.random() * 99);
 
-    // 根据种族基础偏好生成个体偏好（±15%波动）
+    // 根据种族基础偏好生成个体偏好（±15%~25%高斯波动）
     const individualPref = {};
-    for (const [dim, baseVal] of Object.entries(species.gravityPreference)) {
-      const variance = baseVal * 0.15;
+    const basePrefs = species.gravityPreference || {};
+    for (const [dim, baseVal] of Object.entries(basePrefs)) {
+      const variance = baseVal * 0.18;
       const offset = gaussianRandom() * variance;
       individualPref[dim] = Math.max(0, Math.min(10, Math.round((baseVal + offset) * 10) / 10));
     }
 
-    // 预算基于好感度
-    const rep = gameState.state.diplomacy[speciesId]?.reputation || 10;
-    const budget = Math.floor((20 + rep * 2 + Math.random() * 30));
+    // 计算性格标签 (Traits)
+    const traits = generateTouristTraits(speciesId, basePrefs, individualPref, budget);
 
     const tourist = {
       id: `tourist_${++touristIdCounter}`,
@@ -102,6 +123,7 @@ export function updateTouristSystem() {
       speciesId,
       speciesName: species.name,
       preference: individualPref,
+      traits,
       budget,
       spent: 0,
       visitDay: day,
@@ -133,7 +155,60 @@ export function updateTouristSystem() {
   // 游客到达后不再即时结算；满意度在离开时按路线结算
 }
 
-const TOURIST_ATTRACTIONS = ['museum', 'concert_hall', 'monument', 'trade_hub', 'plaza'];
+const TOURIST_ATTRACTIONS = ['museum', 'concert_hall', 'monument', 'trade_hub', 'plaza', 'restaurant', 'amusement_park', 'leisure_park', 'holo_wheel', 'bio_tower', 'float_fountain', 'zen_garden'];
+
+/** 景观打卡随机事件本地掷骰与结算（支持AI与本地降级叙事） */
+export function triggerSceneryEvent(target, visitor, isTourist = true) {
+  const data = getBuildingById(target.buildingId);
+  const buildingName = data?.name || '景观设施';
+  const visitorName = visitor.name || (isTourist ? '外星游客' : '殖民地居民');
+
+  // 事件类型：打赏、灵感、好感、晶体拾取
+  const eventTypes = ['tip', 'inspiration', 'diplomacy', 'crystal'];
+  const eventType = eventTypes[Math.floor(Math.random() * eventTypes.length)];
+  let effectDesc = '';
+
+  if (eventType === 'tip') {
+    const tip = 20 + Math.floor(Math.random() * 31); // 20~50 星币
+    gameState.addResource('credits', tip);
+    effectDesc = `在${buildingName}心潮澎湃，慷慨赞助了 ${tip} 星币！`;
+    bus.emit('fx:float-text', { x: target.x, y: target.y, text: `赞助 +${tip}🪙`, color: '#F1C40F' });
+  } else if (eventType === 'inspiration') {
+    const research = 10 + Math.floor(Math.random() * 11); // 10~20 科研
+    gameState.addResource('research', research);
+    effectDesc = `在${buildingName}流连忘返，顿悟灵感产出 ${research} 点科研点！`;
+    bus.emit('fx:float-text', { x: target.x, y: target.y, text: `灵感 +${research}💡`, color: '#3498DB' });
+  } else if (eventType === 'diplomacy' && isTourist && visitor.speciesId) {
+    if (!gameState.state.diplomacy) gameState.state.diplomacy = {};
+    if (!gameState.state.diplomacy[visitor.speciesId]) {
+      gameState.state.diplomacy[visitor.speciesId] = { reputation: 0 };
+    }
+    gameState.state.diplomacy[visitor.speciesId].reputation += 3;
+    effectDesc = `对${buildingName}赞不绝口，提升了与${visitor.speciesName || '外星文明'}的好感度 (+3)！`;
+    bus.emit('fx:float-text', { x: target.x, y: target.y, text: `好感度 +3❤️`, color: '#E74C3C' });
+  } else {
+    const crystal = 2 + Math.floor(Math.random() * 3); // 2~4 晶体
+    gameState.addResource('crystal', crystal);
+    effectDesc = `在${buildingName}旁偶然拾得散落的微光晶体 (+${crystal})！`;
+    bus.emit('fx:float-text', { x: target.x, y: target.y, text: `晶体 +${crystal}💎`, color: '#9B59B6' });
+  }
+
+  const facts = buildSceneryVisitFacts(visitorName, buildingName, eventType, effectDesc, isTourist);
+  const fallback = getNarrationFallback('scenery_event', facts);
+
+  gameState.addNotification({
+    title: '景观打卡事件',
+    text: fallback,
+    type: 'success',
+    icon: 'sparkles',
+    duration: 6000,
+  });
+
+  bus.emit('scenery:event', { target, visitor, eventType, effectDesc, isTourist });
+  aiClient.generate('scenery_event', facts, () => fallback).then(narration => {
+    bus.emit('scenery:narration', { target, visitor, narration });
+  });
+}
 
 export function scoreAttraction(preference, building, origin = null) {
   const data = getBuildingById(building.buildingId);
@@ -160,19 +235,60 @@ function updateAutonomousVisits(day) {
   const buildings = gameState.state.buildings;
   for (const tourist of activeTourists) {
     if (tourist.lastVisitDay === day || !tourist.itinerary?.length) continue;
-    const nextId = tourist.itinerary.find(id => !tourist.visitedStops.includes(id));
+
+    // 游客不一定会按部就班拜访全部景点，也可能自主漫游或随机挑选
+    const unvisited = tourist.itinerary.filter(id => !tourist.visitedStops.includes(id));
+    if (!unvisited.length) {
+      // 若原计划已游览完，仍有 20% 概率二刷或漫步至其他景观
+      if (Math.random() > 0.2) continue;
+    }
+
+    const nextId = unvisited.length
+      ? (Math.random() < 0.75 ? unvisited[0] : unvisited[Math.floor(Math.random() * unvisited.length)])
+      : tourist.itinerary[Math.floor(Math.random() * tourist.itinerary.length)];
+
     if (!nextId) continue;
     const target = buildings.find(b => b.id === nextId && getBuildingOperationalState(b).operational);
     if (!target) continue;
-    tourist.visitedStops.push(nextId);
+    if (!tourist.visitedStops.includes(nextId)) {
+      tourist.visitedStops.push(nextId);
+    }
     tourist.currentDestination = nextId;
     tourist.lastVisitDay = day;
     bus.emit('tourist:destination', { tourist, building: target });
+
+    const targetData = getBuildingById(target.buildingId);
+
+    // 若拜访的是景观建筑，30% 概率触发景观事件（打赏、灵感、好感度、物资拾取）
+    if (targetData?.category === 'scenery' && Math.random() < 0.35) {
+      triggerSceneryEvent(target, tourist, true);
+    }
 
     // 随机事件：游客路过时冲动购买建筑货架上的加工品
     if (Math.random() < 0.4) {
       impulsePurchase(target, tourist);
     }
+  }
+
+  // 居民日常漫步拜访景观建筑也有概率触发事件
+  if (Math.random() < 0.15 && gameState.state.residents?.length) {
+    const sceneries = buildings.filter(b => {
+      const d = getBuildingById(b.buildingId);
+      return d?.category === 'scenery' && getBuildingOperationalState(b).operational;
+    });
+    if (sceneries.length > 0) {
+      const targetScenery = sceneries[Math.floor(Math.random() * sceneries.length)];
+      const resident = gameState.state.residents[Math.floor(Math.random() * gameState.state.residents.length)];
+      triggerSceneryEvent(targetScenery, resident, false);
+    }
+  }
+
+  // 周期性（每隔数日约 8% 概率）在群落或特殊组合处触发双轨奇遇事件
+  if (Math.random() < 0.08 && buildings.length >= 2) {
+    const visitor = activeTourists.length > 0
+      ? activeTourists[Math.floor(Math.random() * activeTourists.length)]
+      : gameState.state.residents?.[0];
+    triggerComboWonderEvent(null, visitor);
   }
 }
 
@@ -186,6 +302,7 @@ function impulsePurchase(target, tourist) {
   if (income > 0) {
     gameState.addResource('credits', income);
     bus.emit('tourist:impulse-purchase', { tourist, building: target, income });
+    bus.emit('fx:float-text', { x: target.x, y: target.y, text: `+${income}🪙`, color: '#F1C40F' });
   }
   return income;
 }
@@ -232,11 +349,12 @@ export function processTouristSpending(tourists, buildings, routeSatisfaction = 
   let souvenirsSold = 0;
   let souvenirQuality = null;
 
-  // 文化类建筑用于消费
+  // 文化与商业服务类建筑用于消费
   const shops = buildings.filter(b =>
     b.buildingId === 'museum' || b.buildingId === 'concert_hall' ||
     b.buildingId === 'monument' || b.buildingId === 'trade_hub' ||
-    b.buildingId === 'plaza'
+    b.buildingId === 'plaza' || b.buildingId === 'restaurant' ||
+    b.buildingId === 'amusement_park'
   );
 
   if (shops.length === 0) return;
@@ -396,6 +514,64 @@ function grantTech(techId) {
     researched.push(techId);
     bus.emit('tech:completed', { techId });
   }
+}
+
+/**
+ * 根据种族基础与个体偏好计算性格标签 (Traits)
+ */
+export function generateTouristTraits(speciesId, basePrefs, individualPref, budget) {
+  const traits = [];
+
+  // 1. 预算极端属性
+  if (budget >= 70) {
+    traits.push({ id: 'wealthy', label: '星际土豪', desc: '预算充裕，消费毫不手软', icon: 'coins', color: '#F1C40F' });
+  } else if (budget <= 25) {
+    traits.push({ id: 'budget', label: '穷游特种兵', desc: '精打细算，注重性价比', icon: 'backpack', color: '#95A5A6' });
+  }
+
+  // 2. 引力反差与极端偏好
+  const sortedDims = Object.entries(individualPref).sort((a, b) => b[1] - a[1]);
+  const [topDim, topVal] = sortedDims[0] || ['culture', 5];
+  const baseTop = basePrefs[topDim] || 5;
+  const diff = topVal - baseTop;
+
+  // 美食标签
+  if (individualPref.food >= 8.5 || (topDim === 'food' && diff >= 1.5)) {
+    traits.push({ id: 'foodie', label: '宇宙老饕', desc: '对殖民地美食与零食充满执念', icon: 'cookie', color: '#E67E22' });
+  }
+
+  // 文化/艺术标签
+  if (individualPref.culture >= 8.5 || (topDim === 'culture' && diff >= 1.5)) {
+    traits.push({ id: 'art_lover', label: '古典艺术狂热', desc: '必访博物馆与音乐厅', icon: 'sparkles', color: '#9B59B6' });
+  }
+
+  // 知识/科技标签
+  if (individualPref.knowledge >= 8.5 || (topDim === 'knowledge' && diff >= 1.5)) {
+    traits.push({ id: 'tech_geek', label: '参数考据怪', desc: '热衷考察尖端科研设施与装置', icon: 'bot', color: '#3498DB' });
+  }
+
+  // 冒险/探索标签
+  if (individualPref.adventure >= 8.5 || (topDim === 'adventure' && diff >= 1.5)) {
+    traits.push({ id: 'thrill_seeker', label: '极速游侠', desc: '喜欢探索与新奇未知的刺激地标', icon: 'compass', color: '#E74C3C' });
+  }
+
+  // 3. 种族反差萌标签（如研究型的章鱼、贪吃的机甲、爱冒险的花灵）
+  if (speciesId === 'squid' && topDim === 'knowledge' && individualPref.knowledge > 6.5) {
+    traits.push({ id: 'scholar_squid', label: '跨界学者', desc: '触手翻书比吃零食还快的异类章鱼', icon: 'book', color: '#1ABC9C' });
+  } else if (speciesId === 'mecha' && topDim === 'food' && individualPref.food > 6.0) {
+    traits.push({ id: 'gourmet_bot', label: '机油美食家', desc: '试图用传感器品鉴人类食物的机器人', icon: 'cookie', color: '#F39C12' });
+  } else if (speciesId === 'flora' && topDim === 'adventure' && individualPref.adventure > 6.0) {
+    traits.push({ id: 'roaming_spore', label: '流浪孢子', desc: '渴望随风漂洋过海去远方的植物', icon: 'wind', color: '#2ECC71' });
+  } else if (speciesId === 'crystal' && topDim === 'social' && (individualPref.social || 0) > 6.0) {
+    traits.push({ id: 'party_crystal', label: '共鸣舞者', desc: '热衷与大家一起折射欢声笑语', icon: 'music', color: '#E91E63' });
+  }
+
+  // 若无特殊标签，赋予一个可爱的常态标签
+  if (traits.length === 0) {
+    traits.push({ id: 'curious', label: '观光散步家', desc: '随遇而安，享受殖民地宁静时光', icon: 'smile', color: '#3498DB' });
+  }
+
+  return traits.slice(0, 2); // 最多 2 个标签
 }
 
 /**

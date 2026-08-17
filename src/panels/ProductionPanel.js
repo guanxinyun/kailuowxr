@@ -40,30 +40,21 @@ export function openProductionPanel() {
         : '尚未建造综合工坊 · 加工需在综合工坊里配置',
     ]));
 
-    // 资源出售（物资只能卖或作为加工原料）
-    const sellSection = createElement('div', { className: 'production-sell' });
-    sellSection.appendChild(createElement('h3', {}, ['出售资源']));
-    for (const [res, price] of Object.entries(RESOURCE_SELL_PRICES)) {
+    // 物资概览（不再支持直接变卖，获利收敛至货架销售与游客消费）
+    const resourceSection = createElement('div', { className: 'production-sell' });
+    resourceSection.appendChild(createElement('h3', {}, ['基础资源库存']));
+    resourceSection.appendChild(createElement('p', { style: { fontSize: '12px', color: 'var(--text-dim)', marginBottom: '8px' } }, [
+      '💡 原料不可直接卖出，可通过建造综合工坊加工为高品质商品，或在商铺货架上架供外星游客与贸易商队购买获利。'
+    ]));
+    for (const res of ['metal', 'crystal', 'energy', 'food']) {
       const amount = Math.floor(gameState.state.resources[res] || 0);
       const row = createElement('div', { className: 'production-sell-row' }, [
-        createElement('span', {}, [`${RESOURCE_NAMES[res] || res} ×${amount}（${price}星币/单位）`]),
-        (() => {
-          const btn = createElement('button', { className: 'btn btn-sm', disabled: amount <= 0 }, ['全部卖出']);
-          btn.addEventListener('click', () => {
-            const result = sellResource(res, amount);
-            if (result.ok) {
-              gameState.addNotification({ title: '出售成功', text: `卖出 ${result.sold} ${RESOURCE_NAMES[res] || res}，获得 ${result.credits} 星币`, type: 'success', icon: 'coins' });
-            } else {
-              gameState.addNotification({ title: '出售失败', text: result.reason, type: 'warning', icon: 'alert-triangle' });
-            }
-            render();
-          });
-          return btn;
-        })(),
+        createElement('span', {}, [`${RESOURCE_NAMES[res] || res}`]),
+        createElement('strong', { style: { color: 'var(--text-accent)' } }, [`×${amount}`]),
       ]);
-      sellSection.appendChild(row);
+      resourceSection.appendChild(row);
     }
-    container.appendChild(sellSection);
+    container.appendChild(resourceSection);
 
     const inventory = createElement('div', { className: 'production-inventory' });
     const inventoryEntries = Object.entries(summary.inventory).filter(([, entry]) => entry.quantity > 0);
