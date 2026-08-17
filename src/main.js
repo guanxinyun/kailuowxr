@@ -9,7 +9,7 @@ import { ui } from './core/UIManager.js';
 import { aiAdvisor } from './core/AIAdvisor.js';
 import { $, $$, createElement, lucideIcon, formatNumber } from './core/utils.js';
 import { generateMap } from './core/MapGenerator.js';
-import { RESOURCES, GRAVITY_CONFIG, SEASONS, TILE_TYPES } from './data/gamedata.js';
+import { RESOURCES, GRAVITY_CONFIG, SEASONS, TILE_TYPES, EVENTS } from './data/gamedata.js';
 import { BUILDINGS, getBuildingById } from './data/buildings.js';
 import { PRODUCTION_RECIPES, getQuality } from './data/production.js';
 import { openBuildPanel } from './panels/BuildPanel.js';
@@ -116,6 +116,11 @@ async function init() {
   // Game loop
   let lastTick = performance.now();
   const TICK_INTERVAL = 2000; // 2 seconds per game tick at speed 1 (开罗风格节奏)
+
+  // 当速度发生变更时立即重置 lastTick，确保恢复流逝或切换速度时立即响应
+  bus.on('state:speed', () => {
+    lastTick = performance.now();
+  });
 
   function gameLoop(now) {
     const speed = gameState.state.speed;

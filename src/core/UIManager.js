@@ -152,7 +152,7 @@ export class UIManager {
     // 自动暂停时间机制（可在设置中关闭）：首次打开弹窗时记录旧速度并暂停
     const shouldPause = gameState.state.settings?.pauseOnModal !== false;
     if (shouldPause && this._previousSpeedBeforeModal === null) {
-      this._previousSpeedBeforeModal = gameState.state.speed;
+      this._previousSpeedBeforeModal = gameState.state.speed > 0 ? gameState.state.speed : 1;
       if (gameState.state.speed > 0) {
         gameState.set('speed', 0);
       }
