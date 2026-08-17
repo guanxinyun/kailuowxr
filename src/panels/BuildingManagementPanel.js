@@ -7,14 +7,8 @@ import { getManagedBuildings, upgradeBuilding } from '../core/BuildingSystem.js'
 import { getComboSummary } from '../core/ComboSystem.js';
 import { getCurrentBuildingDailyOutput, formatDailyRate } from '../core/ResourceFlowSystem.js';
 import { getShelfSlots, stockShelf, removeFromShelf, PRODUCT_PRICES, buyResource, getDailyBuyLimit, setPromotionLevel, startCampaign, PROMOTION_LEVELS, CAMPAIGN_TEMPLATES, getPromotionBonus } from '../core/TradeSystem.js';
-import { getInventoryEntry, getInventoryQuantity, getBuildingAutoProductionStatus, toggleBuildingAutoProduction, setBuildingAutoProductionTarget, resetBuildingAutoProductionCount } from '../core/ProductionSystem.js';
+import { getInventoryEntry, getInventoryQuantity } from '../core/ProductionSystem.js';
 import { getQuality, PRODUCTION_RECIPES } from '../data/production.js';
-
-const RESOURCE_NAMES = {
-  metal: '金属', crystal: '晶体', energy: '能量', food: '食物',
-  alloy: '星尘合金', crystal_circuit: '晶体电路', nutrient_pack: '营养补给包',
-  energy_cell: '能量电池', bio_sample: '生态标本',
-};
 
 export function openBuildingManagementPanel() {
   const container = createElement('div', { className: 'building-management-panel' });
@@ -64,96 +58,6 @@ export function openBuildingManagementPanel() {
         info.appendChild(createElement('div', { className: 'managed-building-output' }, [`当前产出：0/天${entry.operation.reason ? ` · ${entry.operation.reason}` : ''}`]));
       }
       card.appendChild(info);
-
-      // ===== 自动加工信息与开关 =====
-      const autoStatuses = getBuildingAutoProductionStatus(entry.building);
-      if (autoStatuses.length > 0 && entry.operation.operational) {
-        const autoSection = createElement('div', { className: 'building-auto-production-section' });
-        autoSection.appendChild(createElement('div', { className: 'auto-production-header' }, [
-          lucideIcon('cog', 14),
-          document.createTextNode(' 自动加工'),
-        ]));
-        for (const status of autoStatuses) {
-          const { recipe, enabled, active, progress, targetCount, completedCount } = status;
-          const row = createElement('div', { className: `auto-production-row ${enabled ? '' : 'disabled'}` });
-
-          // 配方信息
-          const recipeInfo = createElement('div', { className: 'auto-production-info' });
-          const inputsText = Object.entries(recipe.inputs)
-            .map(([id, amount]) => `${RESOURCE_NAMES[id] || id} ${amount}`)
-            .join(' + ');
-          recipeInfo.appendChild(createElement('strong', {}, [recipe.name]));
-          recipeInfo.appendChild(createElement('div', { className: 'auto-production-detail' }, [
-            `消耗：${inputsText} → 产出：${recipe.output.name} ×${recipe.output.quantity}`,
-          ]));
-
-          // 进度（如果正在加工中）
-          if (enabled && active) {
-            const pct = Math.min(100, Math.round(progress * 100));
-            recipeInfo.appendChild(createElement('div', { className: 'auto-production-progress' }, [
-              createElement('span', { className: 'auto-progress-bar', style: { width: `${pct}%` } }),
-            ]));
-            recipeInfo.appendChild(createElement('span', { className: 'auto-progress-text' }, [`加工中 ${pct}%`]));
-          } else if (!enabled) {
-            recipeInfo.appendChild(createElement('span', { className: 'auto-progress-text muted' }, ['已暂停']));
-          } else if (targetCount > 0 && completedCount >= targetCount) {
-            recipeInfo.appendChild(createElement('span', { className: 'auto-progress-text muted' }, [`已完成 ${completedCount}/${targetCount}`]));
-          }
-
-          row.appendChild(recipeInfo);
-
-          // 数量设置（目标数量，0=无限）
-          const countRow = createElement('div', { className: 'auto-production-count' });
-          const countLabel = createElement('span', { className: 'auto-count-label' }, ['数量']);
-          const countInput = createElement('input', {
-            type: 'number',
-            className: 'auto-count-input',
-            min: 0,
-            value: targetCount || 0,
-            title: '0 = 无限加工',
-            placeholder: '0=∞',
-          });
-          countInput.addEventListener('change', () => {
-            setBuildingAutoProductionTarget(entry.building, recipe.id, parseInt(countInput.value) || 0);
-            render();
-          });
-          const countStatus = createElement('span', { className: 'auto-count-status' }, [
-            targetCount > 0 ? `${completedCount}/${targetCount}` : '∞',
-          ]);
-          countRow.appendChild(countLabel);
-          countRow.appendChild(countInput);
-          countRow.appendChild(countStatus);
-          if (targetCount > 0 && completedCount > 0) {
-            const resetBtn = createElement('button', {
-              className: 'btn btn-sm',
-              title: '重置已完成计数',
-            }, ['重置']);
-            resetBtn.addEventListener('click', () => {
-              resetBuildingAutoProductionCount(entry.building, recipe.id);
-              render();
-            });
-            countRow.appendChild(resetBtn);
-          }
-          row.appendChild(countRow);
-
-          // 开关按钮
-          const toggleBtn = createElement('button', {
-            className: `btn btn-sm ${enabled ? 'btn-active' : 'btn-muted'}`,
-            title: enabled ? '点击关闭自动加工' : '点击开启自动加工',
-          }, [
-            lucideIcon(enabled ? 'toggle-right' : 'toggle-left', 16),
-            document.createTextNode(enabled ? ' 开' : ' 关'),
-          ]);
-          toggleBtn.addEventListener('click', () => {
-            toggleBuildingAutoProduction(entry.building, recipe.id);
-            render();
-          });
-          row.appendChild(toggleBtn);
-
-          autoSection.appendChild(row);
-        }
-        card.appendChild(autoSection);
-      }
 
       if (entry.upgradeCost) {
         const products = entry.upgradeCost._products;
@@ -320,7 +224,6 @@ export function openBuildingManagementPanel() {
     bus.on('resource:change', render),
     bus.on('trade:shelf-updated', render),
     bus.on('trade:product-sold', render),
-    bus.on('building:auto-production-toggled', render),
     bus.on('day:advance', render),
   ];
   render();

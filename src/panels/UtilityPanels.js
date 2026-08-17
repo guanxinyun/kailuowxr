@@ -4,7 +4,7 @@
 import { gameState } from '../core/GameState.js';
 import { ui } from '../core/UIManager.js';
 import { createElement, lucideIcon, formatNumber } from '../core/utils.js';
-import { RESOURCES, EXPLORE_REGIONS, MAP_EXPANSION } from '../data/gamedata.js';
+import { RESOURCES, EXPLORE_REGIONS } from '../data/gamedata.js';
 import { bus } from '../core/EventBus.js';
 import { TutorialManager } from '../core/TutorialManager.js';
 import { textureManager } from '../core/TextureManager.js';
@@ -16,7 +16,8 @@ import { canStartExpedition, startExpedition, generateRandomExpedition } from '.
 import { getInventoryQuantity } from '../core/ProductionSystem.js';
 import { saveManager } from '../core/SaveManager.js';
 import { getCurrentDailyResourceFlow, formatDailyRate } from '../core/ResourceFlowSystem.js';
-import { canExpand, getExpansionCost, purchaseExpansion } from '../core/MapExpansionSystem.js';
+import { openCardCollectionModal } from './CardCollectionModal.js';
+import { sound } from '../core/SoundSystem.js';
 
 // ===== 探索面板 =====
 
@@ -68,6 +69,22 @@ function renderRegionCard(region, residentId, active, render) {
 
 export function openExplorePanel() {
   const container = createElement('div', { className: 'explore-panel-inner' });
+
+  // 顶部卡牌图鉴入口按钮
+  const topActionRow = createElement('div', {
+    style: { display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }
+  });
+  const cardBookBtn = createElement('button', {
+    className: 'btn btn-sm',
+    style: { display: 'inline-flex', alignItems: 'center', gap: '6px' }
+  }, [
+    lucideIcon('layers', 14),
+    document.createTextNode(' 卡牌图鉴')
+  ]);
+  cardBookBtn.addEventListener('click', () => openCardCollectionModal());
+  topActionRow.appendChild(cardBookBtn);
+  container.appendChild(topActionRow);
+
   const selectedResident = gameState.state.residents[0]?.id || '';
   let residentId = selectedResident;
   const residentSelect = createElement('select', { className: 'settings-texture-select' });
@@ -126,44 +143,49 @@ export function openExplorePanel() {
       }
     }
 
-    // 地图拓展
-    renderExpansion();
+    // 区块探索
+    renderBlockExploration();
   };
 
-  const renderExpansion = () => {
+  const renderBlockExploration = () => {
     expansionSection.replaceChildren();
     expansionSection.appendChild(createElement('div', {
       style: { fontWeight: '700', fontSize: '13px', margin: '14px 0 8px', paddingTop: '10px', borderTop: '1px solid var(--border-subtle)' }
-    }, ['地图拓展']));
+    }, ['区块探索']));
 
-    const check = canExpand();
-    const cost = getExpansionCost();
-    const count = gameState.state.mapExpansion.count || 0;
-    const card = createElement('div', {
-      style: { padding: '10px', borderRadius: '8px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-subtle)' }
-    });
-    card.appendChild(createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } }, [
-      lucideIcon(MAP_EXPANSION.icon, 16),
-      createElement('span', { style: { fontWeight: '600', fontSize: '13px' } }, [MAP_EXPANSION.label]),
-      ...(count > 0 ? [createElement('span', { style: { fontSize: '11px', color: 'var(--text-dim)' } }, [`×${count}`])] : []),
-    ]));
-    if (check.reason === '地图已完全探索') {
-      card.appendChild(createElement('div', { style: { fontSize: '11px', color: 'var(--text-dim)', marginTop: '6px' } }, ['✓ 已完全探索']));
-    } else {
-      if (cost) {
-        const costText = Object.entries(cost).map(([res, amt]) => `${RESOURCES[res]?.name || res} ${amt}`).join(' + ');
-        card.appendChild(createElement('div', { style: { fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' } }, [costText]));
+    const explorations = gameState.state.blockExplorations || [];
+
+    // 进行中的探索（进度条 + 随机事件标记点）
+    for (const exp of explorations) {
+      const pct = Math.max(0, Math.min(100, Math.round((1 - exp.remainingDays / exp.totalDays) * 100)));
+      const card = createElement('div', {
+        style: { padding: '10px', borderRadius: '8px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-subtle)', marginBottom: '8px' }
+      });
+      card.appendChild(createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' } }, [
+        lucideIcon('compass', 16),
+        createElement('span', { style: { fontWeight: '600', fontSize: '13px' } }, [`区块 (${exp.bx},${exp.by}) · ${exp.residentIds.length} 人探索中`]),
+      ]));
+      const bar = createElement('div', { style: { position: 'relative', height: '8px', borderRadius: '4px', background: 'rgba(255,255,255,0.08)' } });
+      bar.appendChild(createElement('div', { style: { height: '100%', width: `${pct}%`, background: 'var(--color-knowledge)', borderRadius: '4px' } }));
+      for (const ev of exp.events || []) {
+        bar.appendChild(createElement('div', {
+          style: {
+            position: 'absolute', left: `${ev.position * 100}%`, top: '50%',
+            transform: 'translate(-50%,-50%)', width: '6px', height: '6px', borderRadius: '50%',
+            background: ev.fired ? '#F0C040' : '#E08080',
+          },
+        }));
       }
-      card.appendChild(createElement('div', { style: { fontSize: '11px', color: 'var(--text-dim)', marginTop: '2px' } }, ['向四周扩展 3 层']));
-      const btn = createElement('button', {
-        className: `btn btn-primary ${check.ok ? '' : 'is-blocked'}`,
-        title: check.ok ? '购买拓展' : (check.reason || ''),
-        style: { marginTop: '6px', fontSize: '12px', padding: '4px 10px' },
-      }, [lucideIcon('map', 13), document.createTextNode(' 拓展')]);
-      btn.addEventListener('click', () => { purchaseExpansion(); render(); });
-      card.appendChild(btn);
+      card.appendChild(bar);
+      card.appendChild(createElement('div', { style: { fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' } }, [`剩余 ${Math.ceil(exp.remainingDays)} / ${exp.totalDays} 天`]));
+      expansionSection.appendChild(card);
     }
-    expansionSection.appendChild(card);
+
+    if (explorations.length === 0) {
+      expansionSection.appendChild(createElement('div', {
+        style: { fontSize: '12px', color: 'var(--text-dim)', fontStyle: 'italic', padding: '8px' }
+      }, ['在地图上点击发暗的「待探索」区块，即可派遣居民前往探索（需花费星币）。']));
+    }
   };
 
   render();
@@ -244,8 +266,19 @@ export function openSettingsPanel() {
   gameSection.appendChild(createElement('h3', {}, ['游戏']));
 
   // Volume
-  gameSection.appendChild(createSettingRow('音效音量', createSlider(70)));
-  gameSection.appendChild(createSettingRow('音乐音量', createSlider(50)));
+  const sfxSlider = createSlider(Math.round(sound.volume * 100));
+  sfxSlider.addEventListener('input', (e) => {
+    sound.setVolume(Number(e.target.value) / 100);
+    sound.play('click');
+  });
+  const sfxToggle = createToggle(sound.enabled);
+  sfxToggle.addEventListener('change', (e) => {
+    sound.setEnabled(e.target.checked);
+    if (e.target.checked) sound.play('click');
+  });
+
+  gameSection.appendChild(createSettingRow('启用音效', sfxToggle));
+  gameSection.appendChild(createSettingRow('音效音量', sfxSlider));
 
   // Toggle settings
   gameSection.appendChild(createSettingRow('自动保存', createToggle(true)));

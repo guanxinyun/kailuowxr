@@ -7,6 +7,7 @@ import { bus } from './EventBus.js';
 import { gameState } from './GameState.js';
 import { SPECIES, getSpeciesById } from '../data/species.js';
 import { getBuildingById } from '../data/buildings.js';
+import { getTechById } from '../data/techs.js';
 import { addInventory, getInventoryEntry } from './ProductionSystem.js';
 import { getQuality } from '../data/production.js';
 import { getBuildingEfficiency, getBuildingOperationalState } from './BuildingSystem.js';
@@ -14,6 +15,7 @@ import { getComboMultiplier } from './ComboSystem.js';
 import { aiClient } from '../ai/AIClient.js';
 import { buildTouristFacts, getNarrationFallback } from './AIContentFacts.js';
 import { touristBuyFromShelf, getPromotionBonus } from './TradeSystem.js';
+import { sound } from './SoundSystem.js';
 
 // 游客名字池（按种族）
 const TOURIST_NAMES = {
@@ -166,7 +168,26 @@ function updateAutonomousVisits(day) {
     tourist.currentDestination = nextId;
     tourist.lastVisitDay = day;
     bus.emit('tourist:destination', { tourist, building: target });
+
+    // 随机事件：游客路过时冲动购买建筑货架上的加工品
+    if (Math.random() < 0.4) {
+      impulsePurchase(target, tourist);
+    }
   }
+}
+
+/**
+ * 游客路过建筑时的随机冲动购买（加工品）。
+ * 购买建筑货架上的加工品；物资购买待物品入建筑后（物流）再接入。
+ */
+function impulsePurchase(target, tourist) {
+  if (!target.shopShelf?.length) return 0;
+  const income = touristBuyFromShelf(target, tourist);
+  if (income > 0) {
+    gameState.addResource('credits', income);
+    bus.emit('tourist:impulse-purchase', { tourist, building: target, income });
+  }
+  return income;
 }
 
 export function calculateVisitSatisfaction(tourist, buildings) {
@@ -259,6 +280,7 @@ export function processTouristSpending(tourists, buildings, routeSatisfaction = 
 
   // 增加星币收入
   if (totalIncome > 0) {
+    sound.play('cash');
     gameState.addResource('credits', totalIncome);
     gameState.addNotification({
       title: '游客消费',
@@ -299,7 +321,7 @@ export function processTouristSpending(tourists, buildings, routeSatisfaction = 
 /**
  * 检查好感度阈值奖励
  */
-function checkTierRewards(speciesId, oldRep, newRep) {
+export function checkTierRewards(speciesId, oldRep, newRep) {
   const species = getSpeciesById(speciesId);
   if (!species) return;
 
@@ -315,6 +337,13 @@ function checkTierRewards(speciesId, oldRep, newRep) {
 
       // 应用具体奖励效果
       applyTierReward(speciesId, tier);
+      gameState.recordEvent({
+        category: 'diplomacy',
+        title: `外交里程碑：${tier.name}`,
+        text: `${species.name} 好感度达到 ${tier.level}，奖励：${tier.reward}`,
+        good: true,
+        meta: { speciesId, tierLevel: tier.level },
+      });
       bus.emit('diplomacy:tier', { species: speciesId, tier });
     }
   }
@@ -324,6 +353,16 @@ function checkTierRewards(speciesId, oldRep, newRep) {
  * 应用好感度阈值奖励
  */
 function applyTierReward(speciesId, tier) {
+  // 建筑图纸奖励：直接加入图纸列表（绕过科技门槛）
+  if (tier.rewardBlueprint && getBuildingById(tier.rewardBlueprint)) {
+    const blueprints = gameState.state.blueprints.buildings;
+    if (!blueprints.includes(tier.rewardBlueprint)) blueprints.push(tier.rewardBlueprint);
+  }
+
+  // 科技奖励：连同缺失的前置一起完成，保持科技树连贯
+  if (tier.rewardTech) grantTech(tier.rewardTech);
+
+  // 既有数值加成
   switch (speciesId) {
     case 'flora':
       if (tier.level === 45) {
@@ -343,6 +382,19 @@ function applyTierReward(speciesId, tier) {
         gameState.set('buildBonus', (gameState.state.buildBonus || 1) * 1.15);
       }
       break;
+  }
+}
+
+/** 赠送科技：连同缺失的前置一并完成，保证科技树连贯 */
+function grantTech(techId) {
+  const tech = getTechById(techId);
+  if (!tech) return;
+  const researched = gameState.state.researchedTechs;
+  if (researched.includes(techId)) return;
+  for (const prereq of tech.prereqs || []) grantTech(prereq);
+  if (!researched.includes(techId)) {
+    researched.push(techId);
+    bus.emit('tech:completed', { techId });
   }
 }
 

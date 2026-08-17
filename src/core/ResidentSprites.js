@@ -6,9 +6,9 @@
 import { gameState } from './GameState.js';
 import { gridToIso } from './MapGenerator.js';
 import { clamp } from './utils.js';
-import { findPath, isWalkable, hasRoad } from './Pathfinding.js';
+import { findRoadPath, isRoadWalkable, hasRoad } from './Pathfinding.js';
 import { textureManager } from './TextureManager.js';
-import { getSpriteDrawRect } from './TexturePresentation.js';
+import { getSpriteDrawRect, SPRITE_FRAME_SIZE } from './TexturePresentation.js';
 
 const TILE_W = 64;
 const TILE_H = 32;
@@ -221,7 +221,11 @@ export class ResidentSprite {
     this.frameTimer = 0;
     this.direction = 'down';
     this.isMoving = false;
-    this.speed = 1.5 + Math.random() * 0.5; // 格/秒
+    // 移动速度：高级住宅（住宅阶段 2/3）提升行走速度
+    const level = this.resident.level || 1;
+    const housingStage = this.resident.housingStage || (level >= 7 ? 3 : level >= 4 ? 2 : 1);
+    const housingSpeedMult = housingStage >= 3 ? 1.6 : housingStage >= 2 ? 1.3 : 1.0;
+    this.speed = (1.5 + Math.random() * 0.5) * housingSpeedMult; // 格/秒
 
     // 行为状态机
     this.state = STATE.IDLE;
@@ -243,7 +247,7 @@ export class ResidentSprite {
         for (let dx = -r; dx <= r; dx++) {
           const x = center + dx;
           const y = center + dy;
-          if (map && isWalkable(map, x, y)) {
+          if (map && isRoadWalkable(map, x, y)) {
             this.gridX = x + 0.5;
             this.gridY = y + 0.5;
             return;
@@ -265,7 +269,7 @@ export class ResidentSprite {
     // 安全检查：如果居民当前位置在未探索区域，传送回已探索区域
     const curTileX = Math.floor(this.gridX);
     const curTileY = Math.floor(this.gridY);
-    if (!isWalkable(map, curTileX, curTileY)) {
+    if (!isRoadWalkable(map, curTileX, curTileY)) {
       this.initPosition(mapSize, map);
       this.enterIdle(500);
       return;
@@ -349,8 +353,9 @@ export class ResidentSprite {
 
     if (buildings.length > 0) {
       if (roll < 0.4) {
-        // 40% 去工作建筑
-        const b = buildings[Math.floor(Math.random() * buildings.length)];
+        // 40% 去工作建筑（优先自己分配到的岗位）
+        const workplace = buildings.find(b => b.workerId === this.resident.id);
+        const b = workplace || buildings[Math.floor(Math.random() * buildings.length)];
         targetX = b.x;
         targetY = b.y;
       } else if (roll < 0.7) {
@@ -387,7 +392,7 @@ export class ResidentSprite {
     for (let attempt = 0; attempt < 15; attempt++) {
       const tx = myX + Math.floor((Math.random() - 0.5) * range * 2);
       const ty = myY + Math.floor((Math.random() - 0.5) * range * 2);
-      if (isWalkable(map, tx, ty) && (tx !== myX || ty !== myY)) {
+      if (isRoadWalkable(map, tx, ty) && (tx !== myX || ty !== myY)) {
         this.navigateTo(map, myX, myY, tx, ty);
         return;
       }
@@ -400,7 +405,7 @@ export class ResidentSprite {
    * 寻路到指定位置
    */
   navigateTo(map, fromX, fromY, toX, toY) {
-    const path = findPath(map, fromX, fromY, toX, toY);
+    const path = findRoadPath(map, fromX, fromY, toX, toY);
     if (path && path.length > 0) {
       this.path = path;
       this.currentWaypoint = this.path.shift();
@@ -425,7 +430,7 @@ export class ResidentSprite {
     // 检查当前路径点是否仍在已探索区域内
     const wpX = this.currentWaypoint.x;
     const wpY = this.currentWaypoint.y;
-    if (!isWalkable(map, wpX, wpY)) {
+    if (!isRoadWalkable(map, wpX, wpY)) {
       // 路径点不可达（可能进入了迷雾），停下来重新寻路
       this.enterIdle(500 + Math.random() * 1000);
       return;
@@ -541,12 +546,13 @@ export class ResidentSprite {
       drawPixelPerson(ctx, iso.x, iso.y, this.colors, this.frame, this.direction, scale);
     }
 
-    // 名字标签
+    // 名字标签 — 自定义立绘（32×32 帧）比像素小人更高，名字需抬到立绘上方避免遮挡
+    const nameLift = image ? (SPRITE_FRAME_SIZE.height + 4) * scale : 18 * scale;
     ctx.fillStyle = this.isAlien ? '#FFD700' : '#E8E6F0';
     ctx.font = `${Math.max(8, 9 * scale)}px "Noto Sans SC"`;
     ctx.textAlign = 'center';
     ctx.globalAlpha = 0.85;
-    ctx.fillText(this.resident.name, iso.x, iso.y - 18 * scale);
+    ctx.fillText(this.resident.name, iso.x, iso.y - nameLift);
     ctx.globalAlpha = 1;
 
     // 状态气泡

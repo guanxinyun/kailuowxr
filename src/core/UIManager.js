@@ -73,13 +73,7 @@ export class UIManager {
     overlay.classList.add('active');
     this._activeModal = modal;
 
-    // Close on overlay click (不使用once，正确管理handler)
-    this._overlayClickHandler = (e) => {
-      if (e.target === overlay) this.closeModal();
-    };
-    overlay.addEventListener('click', this._overlayClickHandler);
-
-    // Close on Escape
+    // 弹窗只在点击关闭按钮或按 Escape 时关闭，点击空白区域不会消失
     this._escHandler = (e) => {
       if (e.key === 'Escape') this.closeModal();
     };
@@ -93,10 +87,6 @@ export class UIManager {
     if (!overlay || !this._activeModal) return;
 
     // 清理事件监听器
-    if (this._overlayClickHandler) {
-      overlay.removeEventListener('click', this._overlayClickHandler);
-      this._overlayClickHandler = null;
-    }
     if (this._escHandler) {
       document.removeEventListener('keydown', this._escHandler);
       this._escHandler = null;

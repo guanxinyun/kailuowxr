@@ -6,7 +6,7 @@
 import { ui } from '../core/UIManager.js';
 import { createElement, lucideIcon } from '../core/utils.js';
 
-const PREVIEW_SIZE = 128; // 预览 canvas 固定大小
+const PREVIEW_MAX = 128; // 预览 canvas 最大边长
 
 /**
  * 将参数映射到等距盒体尺寸
@@ -136,21 +136,26 @@ function drawWireframe(ctx, bw, bd, bh, ox, oy) {
  * @returns {Promise<Blob|'cancel'>}
  */
 export function openBuildingFaceModal(targetW, targetH) {
+  // 预览画布与输出保持相同宽高比，避免等距预览与实际纹理比例不一致
+  const previewScale = Math.min(PREVIEW_MAX / targetW, PREVIEW_MAX / targetH);
+  const previewW = Math.round(targetW * previewScale);
+  const previewH = Math.round(targetH * previewScale);
+
   return new Promise((resolve) => {
     // 状态
     const faces = { front: null, top: null, side: null };
     let widthR = 1.0, depthR = 1.0, heightR = 2.0;
 
-    // 预览 canvas（固定 PREVIEW_SIZE 大小，方便查看）
+    // 预览 canvas（与输出同宽高比）
     const previewCanvas = createElement('canvas', {
-      width: PREVIEW_SIZE, height: PREVIEW_SIZE, className: 'face-preview-canvas',
+      width: previewW, height: previewH, className: 'face-preview-canvas',
     });
     const previewCtx = previewCanvas.getContext('2d');
 
     function redraw() {
-      // 预览用 PREVIEW_SIZE 正方形画布 + 棋盘格背景
-      const { bw, bd, bh, ox, oy } = calcBoxParams(widthR, depthR, heightR, PREVIEW_SIZE, PREVIEW_SIZE);
-      renderBuilding(previewCtx, faces.front, faces.top, faces.side, bw, bd, bh, ox, oy, PREVIEW_SIZE, PREVIEW_SIZE, true);
+      // 预览用与输出同宽高比的画布 + 棋盘格背景
+      const { bw, bd, bh, ox, oy } = calcBoxParams(widthR, depthR, heightR, previewW, previewH);
+      renderBuilding(previewCtx, faces.front, faces.top, faces.side, bw, bd, bh, ox, oy, previewW, previewH, true);
       confirmBtn.disabled = !(faces.front && faces.top);
     }
 

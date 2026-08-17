@@ -43,9 +43,15 @@ export function openBuildPanel() {
     // Grid
     const grid = createElement('div', { className: 'build-grid' });
     const buildings = getBuildingsByCategory(activeCategory);
+    const highestResidentLevel = gameState.state.residents.reduce((max, r) => Math.max(max, r.level || 1), 1);
 
     for (const b of buildings) {
-      const isLocked = b.unlockTech && !gameState.state.researchedTechs.includes(b.unlockTech);
+      const levelLocked = b.unlockLevel && highestResidentLevel < b.unlockLevel;
+      // 科技锁可被探索获得的建筑图纸解锁
+      const techLocked = b.unlockTech
+        && !gameState.state.researchedTechs.includes(b.unlockTech)
+        && !(gameState.state.blueprints?.buildings || []).includes(b.id);
+      const isLocked = levelLocked || techLocked;
       const canAfford = gameState.canAfford(b.cost);
 
       const card = createElement('div', {
@@ -102,9 +108,12 @@ export function openBuildPanel() {
 
       // Lock info
       if (isLocked) {
+        const lockText = levelLocked
+          ? `需要居民达到 ${b.unlockLevel} 级`
+          : `需要科技: ${getTechById(b.unlockTech)?.name || b.unlockTech}`;
         card.appendChild(createElement('div', { className: 'building-lock-info' }, [
           lucideIcon('lock', 12),
-          document.createTextNode(`需要科技: ${getTechById(b.unlockTech)?.name || b.unlockTech}`),
+          document.createTextNode(lockText),
         ]));
       }
 
@@ -175,12 +184,14 @@ export function openBuildPanel() {
       effectItems.push(`${RESOURCES[resource]?.name || resource} +${formatDailyRate(amount)}/天`);
     }
     if (b.effect.population) effectItems.push(`人口上限 +${b.effect.population}`);
+    if (b.effect.moveSpeedBonus) effectItems.push(`入住居民移动速度 +${Math.round(b.effect.moveSpeedBonus * 100)}%`);
     if (b.effect.happiness) effectItems.push(`持续幸福影响 +${b.effect.happiness}`);
     if (b.effect.defense) effectItems.push(`运行时防御 +${b.effect.defense}`);
     if (b.effect.tourism) effectItems.push(`旅游吸引力 +${b.effect.tourism}`);
     if (b.effect.trade) effectItems.push('解锁贸易');
     if (b.effect.storageBonus) effectItems.push(`存储 +${b.effect.storageBonus}`);
     if (b.effect.globalEfficiency) effectItems.push(`全局效率 +${Math.round(b.effect.globalEfficiency * 100)}%`);
+    if (b.effect.haulRadius) effectItems.push(`派居民搬运周边${b.effect.haulRadius}格内建筑产出入库`);
     if (effectItems.length > 0) {
       preview.appendChild(createElement('div', {
         style: { fontSize: '12px', color: 'var(--text-accent)', marginBottom: 'var(--sp-3)', padding: 'var(--sp-2) var(--sp-3)', background: 'rgba(100,140,255,0.08)', borderRadius: 'var(--radius-sm)' },

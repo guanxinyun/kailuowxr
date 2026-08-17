@@ -11,10 +11,12 @@ import { TILE_TYPES, GRAVITY_CONFIG } from '../data/gamedata.js';
 import { getBuildingById } from '../data/buildings.js';
 import { clamp, lucideIcon } from './utils.js';
 import { getBuildingOperationalState, requiresRoadConnection } from './BuildingSystem.js';
-import { getBuildingAutoProductionStatus } from './ProductionSystem.js';
+import { getProductionState } from './ProductionSystem.js';
+import { getBuildingBufferStatus } from './WorkerScheduleSystem.js';
 import { ResidentSpriteManager } from './ResidentSprites.js';
 import { textureManager } from './TextureManager.js';
 import { getBuildingDrawPosition } from './TexturePresentation.js';
+import { getExplorableBlocks, getBlockTiles, getActiveBlockExploration, getBlockOf } from './BlockExplorationSystem.js';
 
 const TILE_W = 64;
 const TILE_H = 32;
@@ -78,6 +80,9 @@ export class CanvasRenderer {
     bus.on('building:placed', () => { this._terrainDirty = true; this._dynamicDirty = true; });
     bus.on('map:expanded', () => { this._terrainDirty = true; });
     bus.on('map:revealed', () => { this._terrainDirty = true; });
+    // 区块探索开始/完成：重绘待探索区块的发暗标记
+    bus.on('explore:block-started', () => { this._terrainDirty = true; });
+    bus.on('explore:block-completed', () => { this._terrainDirty = true; });
     bus.on('state:gravityOverlay', () => { this._heatmapDirty = true; });
     bus.on('textures:changed', ({ slotId } = {}) => {
       if (!slotId || slotId.startsWith('terrain.') || slotId.startsWith('building.') || !slotId) this._terrainDirty = true;
@@ -285,6 +290,14 @@ export class CanvasRenderer {
         bus.emit('building:place', { building: placing, tile });
       }
     } else {
+      // 点击未探索但可派遣的区块 → 打开派遣弹窗
+      if (!tile.explored) {
+        const { bx, by } = getBlockOf(tile.x, tile.y);
+        if (getExplorableBlocks().some((b) => b.bx === bx && b.by === by)) {
+          bus.emit('explore:block-click', { bx, by });
+          return;
+        }
+      }
       bus.emit('tile:click', tile);
     }
   }
@@ -307,7 +320,7 @@ export class CanvasRenderer {
     const loop = () => {
       this._time = performance.now();
 
-      // 建筑加工闪烁：检测相位变化，需要重绘地形层
+      // 建筑状态闪烁（加工中/储备已满）：检测相位变化，需要重绘地形层
       const newPhase = Math.floor((this._time / 500) % 3);
       if (newPhase !== this._lastProcessingPhase) {
         this._lastProcessingPhase = newPhase;
@@ -376,7 +389,62 @@ export class CanvasRenderer {
       this._drawKairoBuilding(ctx, iso.x, iso.y, building);
     }
 
+    // 待探索区块：发暗显示 + 标注「待探索」，点击可派遣
+    this._drawUnexploredBlocks(ctx);
+
     ctx.restore();
+  }
+
+  /**
+   * 绘制待探索区块：未探明地块发暗，区块中心标注「待探索」/「探索中」
+   */
+  _drawUnexploredBlocks(ctx) {
+    const blocks = getExplorableBlocks();
+    if (!blocks.length) return;
+    for (const block of blocks) {
+      const active = getActiveBlockExploration(block.bx, block.by);
+      const tiles = getBlockTiles(block.bx, block.by);
+      let centerX = 0;
+      let centerY = 0;
+      for (const tile of tiles) {
+        centerX += tile.x;
+        centerY += tile.y;
+        if (tile.explored) continue;
+        const iso = gridToIso(tile.x, tile.y, TILE_W, TILE_H);
+        const sx = iso.x * this.camera.zoom + this.camera.x;
+        const sy = iso.y * this.camera.zoom + this.camera.y;
+        if (sx < -TILE_W * 2 || sx > this.width + TILE_W * 2 || sy < -TILE_H * 2 || sy > this.height + TILE_H * 2) continue;
+        const hw = TILE_W / 2;
+        const hh = TILE_H / 2;
+        ctx.beginPath();
+        ctx.moveTo(iso.x, iso.y);
+        ctx.lineTo(iso.x + hw, iso.y + hh);
+        ctx.lineTo(iso.x, iso.y + TILE_H);
+        ctx.lineTo(iso.x - hw, iso.y + hh);
+        ctx.closePath();
+        ctx.fillStyle = active ? 'rgba(30,40,60,0.5)' : 'rgba(8,12,22,0.62)';
+        ctx.fill();
+        ctx.strokeStyle = active ? 'rgba(120,180,255,0.5)' : 'rgba(110,150,255,0.22)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
+      const centerIso = gridToIso(centerX / tiles.length, centerY / tiles.length, TILE_W, TILE_H);
+      const label = active ? '探索中' : '待探索';
+      ctx.font = 'bold 11px "Noto Sans SC"';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const tw = ctx.measureText(label).width;
+      const bw = tw + 16;
+      const bh = 18;
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(centerIso.x - bw / 2, centerIso.y - bh / 2, bw, bh);
+      ctx.strokeStyle = active ? 'rgba(120,180,255,0.6)' : 'rgba(140,170,255,0.4)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(centerIso.x - bw / 2, centerIso.y - bh / 2, bw, bh);
+      ctx.fillStyle = active ? '#BFE0FF' : '#C8D8F0';
+      ctx.fillText(label, centerIso.x, centerIso.y + 1);
+    }
   }
 
   /**
@@ -667,6 +735,7 @@ export class CanvasRenderer {
         );
         ctx.drawImage(customImage, draw.x, draw.y, draw.width, draw.height);
         ctx.restore();
+        this._drawBuildingName(ctx, x, draw.y - 5, building);
         return;
       }
     }
@@ -780,21 +849,7 @@ export class CanvasRenderer {
     ctx.stroke();
 
     // 建筑名称（工作中时三状态闪烁变色）
-    const autoStatuses = getBuildingAutoProductionStatus(building);
-    const isProcessing = autoStatuses.some(s => s.enabled && s.active);
-    if (isProcessing) {
-      // 三状态循环：正常→亮→暗，每组 1.5 秒
-      const phase = Math.floor((this._time / 500) % 3);
-      ctx.fillStyle = phase === 0 ? '#FFFFFF' : phase === 1 ? '#80FF90' : '#40C060';
-    } else {
-      ctx.fillStyle = '#FFFFFF';
-    }
-    ctx.font = 'bold 9px "Noto Sans SC"';
-    ctx.textAlign = 'center';
-    ctx.shadowColor = 'rgba(0,0,0,0.8)';
-    ctx.shadowBlur = 3;
-    ctx.fillText(data.name, x, y - bh - 5);
-    ctx.shadowBlur = 0;
+    this._drawBuildingName(ctx, x, y - bh - 5, building);
 
     // 未连接降落点的警告三角
     if (requiresRoadConnection(building)) {
@@ -803,6 +858,33 @@ export class CanvasRenderer {
         this._drawWarningTriangle(ctx, x + hw * 0.35, y - bh - 10);
       }
     }
+  }
+
+  /**
+   * 建筑名称标签 — 自定义纹理建筑同样显示（工作中时三状态闪烁变色）
+   */
+  _drawBuildingName(ctx, x, topY, building) {
+    const data = getBuildingById(building.buildingId);
+    if (!data) return;
+    // 加工中（工坊有队列）→ 绿色闪烁；储备已满（需搬运）→ 琥珀色闪烁
+    const isProcessing = building.buildingId === 'workshop' && getProductionState().queue.length > 0;
+    const isBufferFull = getBuildingBufferStatus(building).full;
+    if (isProcessing || isBufferFull) {
+      // 三状态循环：正常→亮→暗，每组 1.5 秒
+      const phase = Math.floor((this._time / 500) % 3);
+      const palette = isProcessing
+        ? ['#FFFFFF', '#80FF90', '#40C060']
+        : ['#FFFFFF', '#FFD080', '#E0A040'];
+      ctx.fillStyle = palette[phase];
+    } else {
+      ctx.fillStyle = '#FFFFFF';
+    }
+    ctx.font = 'bold 9px "Noto Sans SC"';
+    ctx.textAlign = 'center';
+    ctx.shadowColor = 'rgba(0,0,0,0.8)';
+    ctx.shadowBlur = 3;
+    ctx.fillText(data.name, x, topY);
+    ctx.shadowBlur = 0;
   }
 
   /**
@@ -912,6 +994,9 @@ export class CanvasRenderer {
     // 渲染居民精灵
     this.spriteManager.render(ctx, this.camera.zoom);
 
+    // 区块探索进度条（含随机事件标记点）
+    this._drawExplorationProgress(ctx);
+
     // 悬停高亮
     if (this.hoveredTile) {
       const tile = this.hoveredTile;
@@ -971,6 +1056,55 @@ export class CanvasRenderer {
     }
 
     ctx.restore();
+  }
+
+  /**
+   * 绘制进行中的区块探索进度条（区块中心），带随机事件位置标记点
+   */
+  _drawExplorationProgress(ctx) {
+    const explorations = gameState.state.blockExplorations || [];
+    if (!explorations.length) return;
+    for (const exp of explorations) {
+      const tiles = getBlockTiles(exp.bx, exp.by);
+      if (!tiles.length) continue;
+      const centerX = tiles.reduce((sum, t) => sum + t.x, 0) / tiles.length;
+      const centerY = tiles.reduce((sum, t) => sum + t.y, 0) / tiles.length;
+      const iso = gridToIso(centerX, centerY, TILE_W, TILE_H);
+      const progress = exp.totalDays > 0 ? 1 - exp.remainingDays / exp.totalDays : 1;
+
+      const bw = TILE_W * 2.6;
+      const bh = 7;
+      const bx = iso.x - bw / 2;
+      const by = iso.y - bh / 2;
+
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.16)';
+      ctx.fillRect(bx, by, bw, bh);
+      ctx.fillStyle = '#5A9AD8';
+      ctx.fillRect(bx, by, bw * Math.max(0, Math.min(1, progress)), bh);
+
+      // 事件位置标记点（未触发偏红、已触发偏金）
+      for (const ev of exp.events || []) {
+        const px = bx + bw * ev.position;
+        ctx.fillStyle = ev.fired ? '#F0C040' : '#E08080';
+        ctx.beginPath();
+        ctx.arc(px, by + bh / 2, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 10px "Noto Sans SC"';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = 'rgba(0,0,0,0.8)';
+      ctx.shadowBlur = 3;
+      ctx.fillText(`探索中 ${Math.ceil(exp.remainingDays)}天`, iso.x, iso.y - 14);
+      ctx.shadowBlur = 0;
+    }
   }
 
   // ===== 热力图渲染 =====

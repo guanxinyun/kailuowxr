@@ -120,3 +120,23 @@
   60%  { transform: translateY(-5px) scale(1.1); opacity: 1; }
   100% { transform: translateY(0) scale(1); opacity: 1; }
 }
+
+@keyframes cardShimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes relicGlow {
+  0%, 100% {
+    box-shadow: 0 0 6px rgba(180, 140, 255, 0.4), inset 0 0 6px rgba(180, 140, 255, 0.2);
+    border-color: rgba(180, 140, 255, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(180, 140, 255, 0.8), inset 0 0 10px rgba(180, 140, 255, 0.4);
+    border-color: rgba(220, 190, 255, 0.9);
+  }
+}

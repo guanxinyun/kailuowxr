@@ -1,12 +1,13 @@
 import { bus } from './EventBus.js';
 import { gameState } from './GameState.js';
 import { getBuildingById } from '../data/buildings.js';
-import { getProductionRecipe, getQuality, PRODUCTION_RECIPES } from '../data/production.js';
+import { getProductionRecipe, getQuality } from '../data/production.js';
 import { getBuildingEfficiency, getBuildingOperationalState } from './BuildingSystem.js';
 import { getComboBonus, getComboMultiplier } from './ComboSystem.js';
 import { addResidentExperience } from './ResidentGrowthSystem.js';
 import { aiClient } from '../ai/AIClient.js';
 import { buildProductFacts, getNarrationFallback } from './AIContentFacts.js';
+import { BALANCE } from '../data/balance.js';
 
 function averageEngineering() {
   const residents = gameState.state.residents || [];
@@ -14,7 +15,7 @@ function averageEngineering() {
   return residents.reduce((sum, resident) => sum + (resident.skills?.engineering || 1), 0) / residents.length;
 }
 
-function getOperationalWorkshops() {
+export function getOperationalWorkshops() {
   return gameState.state.buildings.filter((building) =>
     building.buildingId === 'workshop' && getBuildingOperationalState(building).operational
   );
@@ -56,6 +57,9 @@ export function canStartProduction(recipeId) {
   const recipe = getProductionRecipe(recipeId);
   const production = getProductionState();
   if (!recipe) return { ok: false, reason: '找不到这个配方' };
+  if (recipe.requiresBlueprint && !(gameState.state.blueprints?.products || []).includes(recipeId)) {
+    return { ok: false, reason: '需要先获得加工品图纸' };
+  }
   if (getOperationalWorkshops().length <= 0) return { ok: false, reason: '需要先建造综合工坊' };
   if (production.queue.length >= 3) return { ok: false, reason: '生产队列已满' };
   for (const [resource, amount] of Object.entries(recipe.inputs)) {
@@ -136,11 +140,17 @@ export function updateProductionSystem() {
 export function addInventory(productId, quantity, qualityScore = 0) {
   const entry = getInventoryEntry(productId);
   const previousQuantity = entry.quantity;
-  const nextQuantity = Math.max(0, previousQuantity + quantity);
+  const max = BALANCE.inventory.maxPerItem;
+  const rawNext = previousQuantity + quantity;
+  // 消耗（负）只保底不为负，入库（正）受单类储备上限封顶
+  const nextQuantity = quantity > 0 ? Math.min(Math.max(0, rawNext), max) : Math.max(0, rawNext);
   if (quantity > 0 && nextQuantity > 0) {
-    entry.qualityScore = Math.round(
-      ((entry.qualityScore * previousQuantity) + (qualityScore * quantity)) / nextQuantity,
-    );
+    const added = nextQuantity - previousQuantity;
+    if (added > 0) {
+      entry.qualityScore = Math.round(
+        ((entry.qualityScore * previousQuantity) + (qualityScore * added)) / nextQuantity,
+      );
+    }
   }
   entry.quantity = nextQuantity;
   if (nextQuantity === 0) entry.qualityScore = 0;
@@ -163,23 +173,26 @@ export function getAutoQueue() {
  * @param {string} recipeId
  * @param {'count'|'continuous'} mode
  * @param {number} count - mode='count' 时的目标数量
+ * @param {string|null} buildingId - 指定负责该自动生产的工坊；null 表示任意工坊
  */
-export function setAutoProduction(recipeId, mode, count = 1) {
+export function setAutoProduction(recipeId, mode, count = 1, buildingId = null) {
   const queue = getAutoQueue();
-  const existing = queue.findIndex(e => e.recipeId === recipeId);
+  const existing = queue.findIndex(e => e.recipeId === recipeId && e.buildingId === buildingId);
   if (existing >= 0) queue.splice(existing, 1);
   if (mode === 'count' && count <= 0) return;
   if (mode === 'off') return;
-  queue.push({ recipeId, mode, remaining: mode === 'count' ? count : Infinity });
+  queue.push({ recipeId, mode, remaining: mode === 'count' ? count : Infinity, buildingId });
   bus.emit('production:autoqueue-changed');
 }
 
 /**
  * 取消自动生产
+ * @param {string} recipeId
+ * @param {string|null} buildingId - 与 setAutoProduction 保持一致的工坊定位
  */
-export function cancelAutoProduction(recipeId) {
+export function cancelAutoProduction(recipeId, buildingId = null) {
   const queue = getAutoQueue();
-  const idx = queue.findIndex(e => e.recipeId === recipeId);
+  const idx = queue.findIndex(e => e.recipeId === recipeId && e.buildingId === buildingId);
   if (idx >= 0) queue.splice(idx, 1);
   bus.emit('production:autoqueue-changed');
 }
@@ -195,6 +208,11 @@ export function processAutoQueue() {
   // 按队列顺序尝试开始
   for (const entry of [...queue]) {
     if (production.queue.length >= 3) break; // 工坊队列满
+    // 指定了工坊的任务：该工坊失联（拆除/停机）则跳过
+    if (entry.buildingId != null) {
+      const building = gameState.state.buildings.find(b => b.id === entry.buildingId);
+      if (!building || !getBuildingOperationalState(building).operational) continue;
+    }
     const validation = canStartProduction(entry.recipeId);
     if (!validation.ok) continue;
 
@@ -210,163 +228,6 @@ export function processAutoQueue() {
     }
     // continuous 模式不减少 remaining
   }
-}
-
-// ===== 建筑自动加工（两层分工） =====
-
-const AUTO_SPEED_FACTOR = 0.6;
-
-/**
- * 获取建筑可自动生产的配方列表
- */
-function getAutoRecipesForBuilding(buildingId) {
-  return PRODUCTION_RECIPES.filter(r => r.autoBuilding === buildingId);
-}
-
-/**
- * 检查是否有足够的基础资源来自动生产
- */
-function canAutoConsume(recipe) {
-  for (const [resource, amount] of Object.entries(recipe.inputs)) {
-    if (resource in gameState.state.resources) {
-      if ((gameState.state.resources[resource] || 0) < amount) return false;
-    } else {
-      // 加工品作为原料（复杂配方不会有 autoBuilding，所以这里一般不会触发）
-      if (getInventoryQuantity(resource) < amount) return false;
-    }
-  }
-  return true;
-}
-
-/**
- * 每日更新建筑自动加工进度
- * 有 autoBuilding 字段的简单配方由对应建筑自动生产，速度 ×0.6
- */
-export function updateBuildingAutoProduction() {
-  const state = gameState.state;
-  const buildings = state.buildings || [];
-
-  for (const building of buildings) {
-    if (!getBuildingOperationalState(building).operational) continue;
-    const recipes = getAutoRecipesForBuilding(building.buildingId);
-    if (!recipes.length) continue;
-
-    // 初始化建筑自动加工状态
-    if (!building.autoProduction) {
-      building.autoProduction = {};
-    }
-
-    const efficiency = getBuildingEfficiency(building);
-
-    for (const recipe of recipes) {
-      const ap = building.autoProduction[recipe.id] || { progress: 0, active: false };
-      building.autoProduction[recipe.id] = ap;
-
-      // 检查是否启用（默认关闭，需要玩家手动开启）
-      if (!ap.enabled) continue;
-
-      // 检查目标数量限制（targetCount > 0 时，达到目标后停止）
-      if (ap.targetCount > 0 && (ap.completedCount || 0) >= ap.targetCount) continue;
-
-      // 如果未激活（没有正在进行的生产），尝试开始新一轮
-      if (!ap.active) {
-        if (!canAutoConsume(recipe)) continue;
-        // 扣除原料
-        for (const [resource, amount] of Object.entries(recipe.inputs)) {
-          if (resource in state.resources) {
-            gameState.addResource(resource, -amount);
-          } else {
-            addInventory(resource, -amount);
-          }
-        }
-        ap.active = true;
-        ap.progress = 0;
-      }
-
-      // 推进进度：每天推进 (efficiency × 0.6) / recipe.days
-      const dailyProgress = (efficiency * AUTO_SPEED_FACTOR) / recipe.days;
-      ap.progress += dailyProgress;
-
-      // 完成
-      if (ap.progress >= 1) {
-        // 品质：建筑等级贡献少量品质分（无工坊加成）
-        const qualityScore = Math.min(100, Math.round(
-          (building.level || 1) * 8 + getComboBonus('production_quality') * 0.5
-        ));
-        addInventory(recipe.output.id, recipe.output.quantity, qualityScore);
-        ap.active = false;
-        ap.progress = 0;
-        ap.completedCount = (ap.completedCount || 0) + 1;
-
-        bus.emit('production:auto-completed', {
-          building,
-          recipe,
-          quality: getQuality(qualityScore),
-        });
-      }
-    }
-  }
-}
-
-/**
- * 切换建筑自动加工的启用状态
- * @param {object} building - 建筑实例
- * @param {string} recipeId - 配方 ID
- * @returns {boolean} 切换后的状态
- */
-export function toggleBuildingAutoProduction(building, recipeId) {
-  if (!building.autoProduction) building.autoProduction = {};
-  const ap = building.autoProduction[recipeId] || { progress: 0, active: false };
-  building.autoProduction[recipeId] = ap;
-  const newEnabled = !ap.enabled; // 默认 false，取反
-  ap.enabled = newEnabled;
-  bus.emit('building:auto-production-toggled', { building, recipeId, enabled: newEnabled });
-  return newEnabled;
-}
-
-/**
- * 设置建筑自动加工的目标数量
- * @param {object} building - 建筑实例
- * @param {string} recipeId - 配方 ID
- * @param {number} count - 目标数量，0 表示无限
- */
-export function setBuildingAutoProductionTarget(building, recipeId, count) {
-  if (!building.autoProduction) building.autoProduction = {};
-  const ap = building.autoProduction[recipeId] || { progress: 0, active: false };
-  building.autoProduction[recipeId] = ap;
-  ap.targetCount = Math.max(0, count);
-  if (ap.targetCount > 0) ap.completedCount = ap.completedCount || 0;
-  bus.emit('building:auto-production-toggled', { building, recipeId });
-}
-
-/**
- * 重置建筑自动加工的已完成计数
- */
-export function resetBuildingAutoProductionCount(building, recipeId) {
-  if (!building.autoProduction?.[recipeId]) return;
-  building.autoProduction[recipeId].completedCount = 0;
-  bus.emit('building:auto-production-toggled', { building, recipeId });
-}
-
-/**
- * 获取建筑的自动加工状态列表
- * @param {object} building - 建筑实例
- * @returns {Array<{recipe, enabled, active, progress}>}
- */
-export function getBuildingAutoProductionStatus(building) {
-  const recipes = getAutoRecipesForBuilding(building.buildingId);
-  if (!recipes.length) return [];
-  return recipes.map((recipe) => {
-    const ap = building.autoProduction?.[recipe.id];
-    return {
-      recipe,
-      enabled: !!ap?.enabled,
-      active: ap?.active || false,
-      progress: ap?.progress || 0,
-      targetCount: ap?.targetCount || 0,
-      completedCount: ap?.completedCount || 0,
-    };
-  });
 }
 
 export function getProductionSummary() {

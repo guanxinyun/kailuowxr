@@ -8,6 +8,9 @@ import { getComboMultiplier } from './ComboSystem.js';
 export const FLOW_RESOURCE_KEYS = ['metal', 'crystal', 'energy', 'food', 'research', 'credits'];
 const RESOURCE_KEYS = FLOW_RESOURCE_KEYS;
 
+// 需要实体储存与搬运的资源（研究点/星币为抽象资源，直接入账不经过建筑储备）
+export const HAULABLE_RESOURCES = ['metal', 'crystal', 'energy', 'food'];
+
 function emptyRates() {
   return Object.fromEntries(RESOURCE_KEYS.map((key) => [key, 0]));
 }

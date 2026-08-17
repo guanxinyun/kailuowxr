@@ -43,7 +43,8 @@ export function generateMap(size = 32, seed = 42) {
         type,
         x, y,
         building: null,
-        explored: distance(x, y, size / 2, size / 2) < 6,
+        // 初始已探明区域为 4×8 矩形（8 宽 × 4 高，覆盖初始建筑与降落点）
+        explored: x >= size / 2 - 4 && x < size / 2 + 4 && y >= size / 2 - 2 && y < size / 2 + 2,
         gravityField: { food: 0, knowledge: 0, comfort: 0, adventure: 0, culture: 0, nature: 0 },
       });
     }

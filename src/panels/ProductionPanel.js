@@ -1,8 +1,9 @@
 import { gameState } from '../core/GameState.js';
 import { ui } from '../core/UIManager.js';
 import { createElement, lucideIcon } from '../core/utils.js';
-import { PRODUCTION_RECIPES, getQuality } from '../data/production.js';
-import { canStartProduction, getEstimatedProductionQuality, getProductionSummary, startProduction, getAutoQueue, setAutoProduction, cancelAutoProduction } from '../core/ProductionSystem.js';
+import { getQuality } from '../data/production.js';
+import { getProductionSummary } from '../core/ProductionSystem.js';
+import { sellResource, RESOURCE_SELL_PRICES } from '../core/TradeSystem.js';
 import { bus } from '../core/EventBus.js';
 
 const PRODUCT_COPY = new Map();
@@ -22,13 +23,47 @@ const RESOURCE_NAMES = {
   star_souvenir: '星尘纪念品',
 };
 
+/**
+ * 物资总览面板：出售资源、查看加工库存与生产队列。
+ * 配方选择与自动生产已移到「综合工坊」的建筑子页。
+ */
 export function openProductionPanel() {
   const container = createElement('div', { className: 'production-panel-inner' });
+
   const render = () => {
     container.replaceChildren();
     const summary = getProductionSummary();
-    const workshopText = summary.workshops > 0 ? `已建造 ${summary.workshops} 座综合工坊` : '尚未建造综合工坊';
-    container.appendChild(createElement('p', { className: 'settings-hint' }, [workshopText]));
+
+    container.appendChild(createElement('p', { className: 'settings-hint' }, [
+      summary.workshops > 0
+        ? `已建造 ${summary.workshops} 座综合工坊 · 点击地图上的工坊可设置加工`
+        : '尚未建造综合工坊 · 加工需在综合工坊里配置',
+    ]));
+
+    // 资源出售（物资只能卖或作为加工原料）
+    const sellSection = createElement('div', { className: 'production-sell' });
+    sellSection.appendChild(createElement('h3', {}, ['出售资源']));
+    for (const [res, price] of Object.entries(RESOURCE_SELL_PRICES)) {
+      const amount = Math.floor(gameState.state.resources[res] || 0);
+      const row = createElement('div', { className: 'production-sell-row' }, [
+        createElement('span', {}, [`${RESOURCE_NAMES[res] || res} ×${amount}（${price}星币/单位）`]),
+        (() => {
+          const btn = createElement('button', { className: 'btn btn-sm', disabled: amount <= 0 }, ['全部卖出']);
+          btn.addEventListener('click', () => {
+            const result = sellResource(res, amount);
+            if (result.ok) {
+              gameState.addNotification({ title: '出售成功', text: `卖出 ${result.sold} ${RESOURCE_NAMES[res] || res}，获得 ${result.credits} 星币`, type: 'success', icon: 'coins' });
+            } else {
+              gameState.addNotification({ title: '出售失败', text: result.reason, type: 'warning', icon: 'alert-triangle' });
+            }
+            render();
+          });
+          return btn;
+        })(),
+      ]);
+      sellSection.appendChild(row);
+    }
+    container.appendChild(sellSection);
 
     const inventory = createElement('div', { className: 'production-inventory' });
     const inventoryEntries = Object.entries(summary.inventory).filter(([, entry]) => entry.quantity > 0);
@@ -65,76 +100,6 @@ export function openProductionPanel() {
       ]));
     }
     container.appendChild(queue);
-
-    const recipes = createElement('div', { className: 'production-recipes' });
-    recipes.appendChild(createElement('h3', {}, ['加工配方']));
-    for (const recipe of PRODUCTION_RECIPES) {
-      const validation = canStartProduction(recipe.id);
-      const quality = getEstimatedProductionQuality();
-      const card = createElement('div', { className: 'production-recipe' });
-      card.appendChild(createElement('div', { className: 'production-recipe-icon' }, [lucideIcon(recipe.icon, 20)]));
-      const details = createElement('div', { className: 'production-recipe-details' });
-      details.appendChild(createElement('strong', {}, [recipe.name]));
-      details.appendChild(createElement('p', {}, [recipe.desc]));
-      details.appendChild(createElement('div', { className: 'production-cost' }, [
-        `需要：${Object.entries(recipe.inputs).map(([id, amount]) => `${RESOURCE_NAMES[id] || id} ${amount}`).join(' · ')}`,
-      ]));
-      details.appendChild(createElement('div', { className: 'production-output' }, [
-        `产出：${recipe.output.name} ×${recipe.output.quantity} · ${recipe.days}天 · 预计${quality.grade}级`,
-      ]));
-      card.appendChild(details);
-      const button = createElement('button', { className: `btn btn-primary ${validation.ok ? '' : 'is-blocked'}` }, [
-        lucideIcon('play', 14), document.createTextNode(' 开始'),
-      ]);
-      button.title = validation.ok ? '开始加工' : validation.reason;
-      button.addEventListener('click', () => {
-        const result = startProduction(recipe.id);
-        if (!result.ok) {
-          gameState.addNotification({ title: '无法开始加工', text: result.reason, type: 'warning', icon: 'alert-triangle' });
-          return;
-        }
-        render();
-      });
-      card.appendChild(button);
-
-      // 自动生产控制
-      const autoQueue = getAutoQueue();
-      const autoEntry = autoQueue.find(e => e.recipeId === recipe.id);
-      const autoDiv = createElement('div', { className: 'production-auto-controls' });
-
-      if (autoEntry) {
-        const label = autoEntry.mode === 'continuous'
-          ? '持续生产中'
-          : `自动：剩余 ${autoEntry.remaining} 个`;
-        autoDiv.appendChild(createElement('span', { className: 'auto-status active' }, [label]));
-        const cancelBtn = createElement('button', { className: 'btn btn-sm btn-danger' }, ['取消']);
-        cancelBtn.addEventListener('click', () => { cancelAutoProduction(recipe.id); render(); });
-        autoDiv.appendChild(cancelBtn);
-      } else {
-        const countInput = createElement('input', {
-          type: 'number', min: '1', max: '99', value: '5',
-          className: 'auto-count-input',
-        });
-        const countBtn = createElement('button', { className: 'btn btn-sm' }, ['产N个']);
-        countBtn.addEventListener('click', () => {
-          const n = parseInt(countInput.value) || 5;
-          setAutoProduction(recipe.id, 'count', n);
-          render();
-        });
-        const contBtn = createElement('button', { className: 'btn btn-sm' }, ['持续']);
-        contBtn.addEventListener('click', () => {
-          setAutoProduction(recipe.id, 'continuous');
-          render();
-        });
-        autoDiv.appendChild(countInput);
-        autoDiv.appendChild(countBtn);
-        autoDiv.appendChild(contBtn);
-      }
-      card.appendChild(autoDiv);
-
-      recipes.appendChild(card);
-    }
-    container.appendChild(recipes);
   };
 
   const unsubscribers = [
@@ -142,11 +107,10 @@ export function openProductionPanel() {
     bus.on('production:inventory', render),
     bus.on('production:started', render),
     bus.on('production:completed', render),
-    bus.on('production:autoqueue-changed', render),
     bus.on('production:copy', ({ productId, copy }) => { PRODUCT_COPY.set(productId, copy); render(); }),
   ];
   render();
-  const content = ui.createModalContent('生产加工', 'factory', container);
+  const content = ui.createModalContent('物资总览', 'factory', container);
   ui.openModal(content, 'modal-lg');
   bus.once('modal:close', () => unsubscribers.forEach((unsubscribe) => unsubscribe()));
 }

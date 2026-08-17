@@ -11,31 +11,41 @@ import { $, $$, createElement, lucideIcon, formatNumber } from './core/utils.js'
 import { generateMap } from './core/MapGenerator.js';
 import { RESOURCES, GRAVITY_CONFIG, SEASONS, TILE_TYPES } from './data/gamedata.js';
 import { BUILDINGS, getBuildingById } from './data/buildings.js';
+import { PRODUCTION_RECIPES, getQuality } from './data/production.js';
 import { openBuildPanel } from './panels/BuildPanel.js';
 import { openTechPanel } from './panels/TechPanel.js';
 import { openDiplomacyPanel } from './panels/DiplomacyPanel.js';
 import { openResidentPanel } from './panels/ResidentPanel.js';
 import { openAnnualPanel } from './panels/AnnualPanel.js';
 import { triggerRandomEvent } from './panels/EventModal.js';
+import { openBlockDispatchModal, showBlockEventModal } from './panels/BlockExplorationPanel.js';
+import { openDebugPanel } from './panels/DebugPanel.js';
 import { openExplorePanel, openStatsPanel, openSettingsPanel } from './panels/UtilityPanels.js';
 import { openProductionPanel } from './panels/ProductionPanel.js';
 import { openBuildingManagementPanel } from './panels/BuildingManagementPanel.js';
 import { openTourismPanel } from './panels/TourismPanel.js';
 import { TutorialManager } from './core/TutorialManager.js';
 import { updateTouristSystem } from './core/TouristManager.js';
-import { updateProductionSystem, updateBuildingAutoProduction, processAutoQueue, getInventoryEntry, addInventory, getBuildingAutoProductionStatus, toggleBuildingAutoProduction } from './core/ProductionSystem.js';
-import { RESIDENT_NAME_POOL, TRAIT_POOL } from './data/residents.js';
+import { updateProductionSystem, processAutoQueue, getInventoryEntry, addInventory, canStartProduction, startProduction, getAutoQueue, setAutoProduction, cancelAutoProduction, getProductionSummary } from './core/ProductionSystem.js';
 import { textureManager } from './core/TextureManager.js';
-import { getBuildingEfficiency, getBuildingOperationalState, getBuildingLevel, getUpgradeCost, upgradeBuilding, demolishBuilding } from './core/BuildingSystem.js';
+import { getBuildingEfficiency, getBuildingOperationalState, getBuildingLevel, getUpgradeCost, upgradeBuilding, demolishBuilding, recalculatePopulationCapacity, assignWorkers } from './core/BuildingSystem.js';
 import { evaluateCombos } from './core/ComboSystem.js';
 import { updateTradeSystem, ensureTradeState } from './core/TradeSystem.js';
 import { normalizeAllResidents, updateResidentGrowth } from './core/ResidentGrowthSystem.js';
 import { normalizeExplorationState, updateExplorationSystem, unlockRegion } from './core/ExplorationSystem.js';
+import { updateBlockExplorations } from './core/BlockExplorationSystem.js';
 import { saveManager } from './core/SaveManager.js';
-import { generateComboComment, handleAIContentMilestone, restoreDynamicContent, updateDynamicContent } from './core/DynamicContentSystem.js';
+import { generateComboComment, handleAIContentMilestone, restoreDynamicContent, updateDynamicContent, runMonthlyComboCheck } from './core/DynamicContentSystem.js';
 import { openAIContentPanel } from './panels/AIContentPanel.js';
 import { BALANCE } from './data/balance.js';
+import { sound } from './core/SoundSystem.js';
 import { getCurrentDailyResourceFlow, getCurrentBuildingDailyOutput, formatDailyRate } from './core/ResourceFlowSystem.js';
+import { updateWarehouseHauling } from './core/LogisticsSystem.js';
+import { runMonthlyMaintenance } from './core/MaintenanceSystem.js';
+import { showMonthlyBriefing } from './panels/MonthlyBriefingPanel.js';
+import { buildMonthlyBriefingFacts } from './core/AIContentFacts.js';
+import { updateBuildingWorkCycle, getBuildingBufferStatus } from './core/WorkerScheduleSystem.js';
+import { handleTechCardUnlock } from './core/CardGameSystem.js';
 
 // ===== Initialize =====
 async function init() {
@@ -48,15 +58,43 @@ async function init() {
     const landingPad = { id: 'bld_landing', buildingId: 'landing_pad', x: center, y: center, built: true, progress: 1 };
     gameState.addBuilding(landingPad);
     map[center][center].building = 'landing_pad';
+
+    // 开局自带：3 间住宅 + 一段连接通道（居民/游客只走道路）
+    const startingBuildings = [
+      { id: 'bld_habitat_1', buildingId: 'habitat', x: 14, y: 16 },
+      { id: 'bld_habitat_2', buildingId: 'habitat', x: 15, y: 16 },
+      { id: 'bld_habitat_3', buildingId: 'habitat', x: 17, y: 16 },
+      { id: 'bld_road_1', buildingId: 'road', x: 14, y: 15 },
+      { id: 'bld_road_2', buildingId: 'road', x: 15, y: 15 },
+      { id: 'bld_road_3', buildingId: 'road', x: 16, y: 15 },
+      { id: 'bld_road_4', buildingId: 'road', x: 17, y: 15 },
+      { id: 'bld_road_5', buildingId: 'road', x: 18, y: 15 },
+    ];
+    for (const b of startingBuildings) {
+      gameState.addBuilding({ ...b, built: true, progress: 1 });
+      map[b.y][b.x].building = b.buildingId;
+    }
   }
   normalizeAllResidents();
   normalizeExplorationState();
   ensureTradeState();
   restoreDynamicContent();
+  recalculatePopulationCapacity();
+  assignWorkers();
 
   // 事件解锁探索区域
   bus.on('event:resolved', ({ event }) => {
     if (event.unlockRegion) unlockRegion(event.unlockRegion);
+  });
+
+  // 区块探索进度条上的随机事件 → 弹出结果（本地掷骰效果 + AI 叙事）
+  bus.on('explore:block-event', ({ outcome }) => {
+    showBlockEventModal(outcome);
+  });
+
+  // 点击待探索区块 → 派遣弹窗
+  bus.on('explore:block-click', ({ bx, by }) => {
+    openBlockDispatchModal(bx, by);
   });
 
   // Setup UI components
@@ -162,6 +200,7 @@ async function init() {
     }
     const terrainNote = isSpecialTerrain ? `（${tileInfo.name}地形）` : '';
     gameState.addNotification({ title: '开始建造', text: `${data.name}${terrainNote} 建造中...`, type: 'success', icon: 'hammer' });
+    sound.play('build');
     renderer.markDirty();
   });
 
@@ -186,7 +225,11 @@ async function init() {
   });
   bus.on('map:revealed', ({ biome }) => handleAIContentMilestone('biome', biome, `生成适合${biome}生态区的设施`));
   bus.on('diplomacy:tier', ({ species, tier }) => handleAIContentMilestone('diplomacy', `${species}:${tier.level}`, '根据新外交阶段生成和平交流内容'));
-  bus.on('tech:completed', ({ techId }) => handleAIContentMilestone('technology', techId, '根据刚完成的科技生成相关设施'));
+  bus.on('tech:completed', ({ techId }) => {
+    sound.play('tech');
+    handleTechCardUnlock(techId);
+    handleAIContentMilestone('technology', techId, '根据刚完成的科技生成相关设施');
+  });
   bus.on('ai:shortage', ({ resource }) => aiAdvisor.getContextualTip().then(tip => ui.setBottomMessage(`[资源提醒] ${tip}`)));
 
   // Tile click — open building info side panel
@@ -205,6 +248,12 @@ async function init() {
   // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    // 隐藏调试入口：Ctrl+Shift+D 打开 AI 事件调试面板（调制模式）
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'D' || e.key === 'd')) {
+      e.preventDefault();
+      openDebugPanel();
+      return;
+    }
     switch (e.key) {
       case 'b': case 'B': openBuildPanel(); break;
       case 't': case 'T': openTechPanel(); break;
@@ -266,6 +315,7 @@ function gameTick() {
   updateTradeSystem();
   updateResidentGrowth();
   updateExplorationSystem();
+  updateBlockExplorations();
   updateDynamicContent();
 
   // 当前季节效果
@@ -319,10 +369,9 @@ function gameTick() {
           type: 'success',
           icon: 'check',
         });
-        // Apply instant-on-build effects
-        if (data.effect.population) {
-          gameState.set('maxPopulation', gameState.state.maxPopulation + data.effect.population);
-        }
+        // 建筑建成后：重算人口上限并重新分配居民工作
+        recalculatePopulationCapacity();
+        assignWorkers();
       }
       continue; // 未建完不产出
     }
@@ -375,11 +424,23 @@ function gameTick() {
     }
   }
 
-  // 每日资源流统一结算：持续产出、持续消耗与面板使用同一结果
+  // 每日资源流统一结算：
+  // - 抽象资源（研究点/星币）直接入账；搬运类资源（金属/晶体/能量/食物）先进入各建筑储备
   const dailyFlow = getCurrentDailyResourceFlow();
-  for (const [resource, amount] of Object.entries(dailyFlow.net)) {
-    if (amount) gameState.addResource(resource, amount);
+  for (const [resource, amount] of Object.entries(dailyFlow.production)) {
+    if ((resource === 'research' || resource === 'credits') && amount) {
+      gameState.addResource(resource, amount);
+    }
   }
+  for (const [resource, amount] of Object.entries(dailyFlow.consumption)) {
+    if (amount) gameState.addResource(resource, -amount);
+  }
+
+  // 居民工作节奏：产出累计进各建筑储备，储备满则停滞（休息日自动跳过）
+  updateBuildingWorkCycle();
+
+  // 仓储搬运：仓储中心/搬运站的居民把周边建筑储备搬进全局库存
+  updateWarehouseHauling();
 
   // 幸福度变化（建筑加成 - 消耗 - 季节影响 + 社交技能加成）
   const happinessDelta = totalHappiness * skillHappyBonus - 0.1 + (season.effect?.comfort || 0) * 0.01;
@@ -428,21 +489,9 @@ function gameTick() {
     }
   }
 
-  // 人口增长（幸福度高 + 有空余住房 + 食物充足）
-  const state = gameState.state;
-  if (state.population < state.maxPopulation &&
-      state.happiness >= 60 &&
-      state.resources.food > 20 &&
-      state.day % 10 === 0) {
-    if (Math.random() < 0.4) {
-      growPopulation();
-    }
-  }
-
   // 生产加工系统
   updateProductionSystem();
   processAutoQueue();
-  updateBuildingAutoProduction();
 
   // 外星游客系统
   updateTouristSystem();
@@ -479,68 +528,26 @@ function gameTick() {
     bus.emit('year:review');
   }
 
-  // Update UI
-  ui.updateResourceDisplay();
-}
+  // ===== 月度结算：维护费 + 星尘月报 =====
+  if (gameState.state.day % BALANCE.monthly.monthDays === 0) {
+    const maintenance = runMonthlyMaintenance();
+    if (maintenance.summary.credits > 0) {
+      gameState.addNotification({
+        title: '月度维护',
+        text: `本月 ${maintenance.summary.buildings} 栋设施维护，扣除 ${maintenance.summary.credits} 星币`,
+        type: 'info',
+        icon: 'wrench',
+      });
+    }
+    const facts = buildMonthlyBriefingFacts(gameState.state);
+    showMonthlyBriefing(facts);
 
-/**
- * 人口增长 - 生成新居民
- */
-function growPopulation() {
-  const state = gameState.state;
-  const name = RESIDENT_NAME_POOL[Math.floor(Math.random() * RESIDENT_NAME_POOL.length)];
-  const traits = [];
-  const traitCount = 1 + Math.floor(Math.random() * 2);
-  for (let i = 0; i < traitCount; i++) {
-    const t = TRAIT_POOL[Math.floor(Math.random() * TRAIT_POOL.length)];
-    if (!traits.includes(t)) traits.push(t);
+    // 月度组合自动检查（AI 根据已建成设施提出并采纳布局组合）
+    runMonthlyComboCheck();
   }
 
-  const newResident = {
-    id: `res_${String(state.residents.length + 1).padStart(3, '0')}`,
-    name,
-    title: '殖民者',
-    icon: 'user',
-    level: 1,
-    traits,
-    gravityPreference: {
-      food: 3 + Math.floor(Math.random() * 5),
-      knowledge: 2 + Math.floor(Math.random() * 5),
-      comfort: 3 + Math.floor(Math.random() * 4),
-      adventure: 2 + Math.floor(Math.random() * 5),
-      culture: 2 + Math.floor(Math.random() * 4),
-      nature: 2 + Math.floor(Math.random() * 5),
-    },
-    skills: {
-      engineering: 1 + Math.floor(Math.random() * 4),
-      research: 1 + Math.floor(Math.random() * 4),
-      farming: 1 + Math.floor(Math.random() * 4),
-      combat: 1 + Math.floor(Math.random() * 4),
-      social: 1 + Math.floor(Math.random() * 4),
-      survival: 1 + Math.floor(Math.random() * 4),
-    },
-    xp: 0,
-    stamina: 10,
-    labor: 10,
-    exploration: 10,
-    proficiency: { engineering: 0, research: 0, farming: 0, social: 0, survival: 0 },
-    housingStage: 1,
-    growthLog: [],
-    mood: state.happiness,
-    diary: [`第${state.day}天：我来到了星尘殖民地，这里将是我的新家。`],
-  };
-
-  state.residents.push(newResident);
-  state.population = state.residents.length;
-  bus.emit('state:population', { value: state.population });
-
-  gameState.addNotification({
-    title: '新居民加入！',
-    text: `${name} 加入了殖民地。人口：${state.population}/${state.maxPopulation}`,
-    type: 'success',
-    icon: 'user-plus',
-    duration: 4000,
-  });
+  // Update UI
+  ui.updateResourceDisplay();
 }
 
 // ===== Setup Functions =====
@@ -597,7 +604,7 @@ function setupToolPanel() {
     { id: 'diplomacy', icon: 'globe',           label: '外交 (D)',    action: openDiplomacyPanel },
     { id: 'residents', icon: 'users',           label: '居民 (R)',    action: openResidentPanel },
     { id: 'explore',   icon: 'compass',         label: '探索 (E)',    action: openExplorePanel },
-    { id: 'production', icon: 'factory',        label: '加工 (P)',    action: openProductionPanel },
+    { id: 'production', icon: 'factory',        label: '物资 (P)',    action: openProductionPanel },
     { id: 'manage',    icon: 'building-2',      label: '设施 (M)',    action: openBuildingManagementPanel },
     { id: 'tourism',   icon: 'map-pinned',      label: '旅游 (V)',    action: openTourismPanel },
     { id: 'ai-content', icon: 'sparkles',       label: 'AI工坊 (A)',  action: openAIContentPanel },
@@ -702,6 +709,107 @@ const CATEGORY_NAMES = {
   culture: '文化', military: '防御', special: '特殊',
 };
 
+/** 资源/加工品的中文标签（优先取全局资源名，再取配方名） */
+function resourceLabel(id) {
+  if (RESOURCES[id]?.name) return RESOURCES[id].name;
+  const recipe = PRODUCTION_RECIPES.find((r) => r.id === id);
+  return recipe?.output?.name || recipe?.name || id;
+}
+
+/** 综合工坊的加工配置子页：配方 + 本工坊自动生产 + 全局队列 */
+function renderWorkshopSection(panel, building) {
+  const section = createElement('div', { className: 'building-info-section' });
+  section.appendChild(createElement('h4', {}, ['加工配置']));
+
+  const blueprints = gameState.state.blueprints?.products || [];
+  const autoQueue = getAutoQueue();
+  const summary = getProductionSummary();
+
+  for (const recipe of PRODUCTION_RECIPES) {
+    const blueprintLocked = recipe.requiresBlueprint && !blueprints.includes(recipe.id);
+    const validation = blueprintLocked ? { ok: false, reason: '需要从探索中获得加工品图纸' } : canStartProduction(recipe.id);
+    const inputsText = Object.entries(recipe.inputs)
+      .map(([id, amount]) => `${resourceLabel(id)} ${amount}`).join(' + ');
+
+    const row = createElement('div', { className: 'building-info-auto-row' });
+    row.appendChild(createElement('div', { className: 'building-info-auto-detail' }, [
+      createElement('strong', {}, [recipe.name]),
+      createElement('div', {}, [
+        blueprintLocked ? '需要从探索中获得加工品图纸' : `${inputsText} → ${recipe.output.name} ×${recipe.output.quantity}`,
+      ]),
+    ]));
+
+    // 手动开始
+    const startBtn = createElement('button', {
+      className: `btn btn-sm btn-primary ${validation.ok ? '' : 'is-blocked'}`,
+      title: validation.ok ? '开始加工' : validation.reason,
+    }, [lucideIcon('play', 12), document.createTextNode(' 开始')]);
+    startBtn.addEventListener('click', () => {
+      const result = startProduction(recipe.id);
+      if (!result.ok) {
+        gameState.addNotification({ title: '无法开始加工', text: result.reason, type: 'warning', icon: 'alert-triangle' });
+      }
+      openBuildingInfoPanel(building); // 刷新面板
+    });
+    row.appendChild(startBtn);
+    section.appendChild(row);
+
+    // 自动生产（绑定到本工坊，另起一行，避免挤占配方信息）
+    if (!blueprintLocked) {
+      const autoRow = createElement('div', {
+        style: { display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', paddingLeft: '8px', marginTop: '2px' },
+      });
+      const autoEntry = autoQueue.find((e) => e.recipeId === recipe.id && e.buildingId === building.id);
+      if (autoEntry) {
+        const label = autoEntry.mode === 'continuous' ? '持续生产中' : `自动：剩余 ${autoEntry.remaining} 个`;
+        autoRow.appendChild(createElement('span', { className: 'auto-status active' }, [label]));
+        const cancelBtn = createElement('button', { className: 'btn btn-sm btn-danger' }, ['取消']);
+        cancelBtn.addEventListener('click', () => {
+          cancelAutoProduction(recipe.id, building.id);
+          openBuildingInfoPanel(building);
+        });
+        autoRow.appendChild(cancelBtn);
+      } else {
+        const countInput = createElement('input', { type: 'number', min: '1', max: '99', value: '5', className: 'auto-count-input' });
+        const countBtn = createElement('button', { className: 'btn btn-sm' }, ['产N个']);
+        countBtn.addEventListener('click', () => {
+          setAutoProduction(recipe.id, 'count', parseInt(countInput.value) || 5, building.id);
+          openBuildingInfoPanel(building);
+        });
+        const contBtn = createElement('button', { className: 'btn btn-sm' }, ['持续']);
+        contBtn.addEventListener('click', () => {
+          setAutoProduction(recipe.id, 'continuous', 1, building.id);
+          openBuildingInfoPanel(building);
+        });
+        autoRow.appendChild(countInput);
+        autoRow.appendChild(countBtn);
+        autoRow.appendChild(contBtn);
+      }
+      section.appendChild(autoRow);
+    }
+  }
+
+  // 生产队列（全局，最多 3）
+  section.appendChild(createElement('div', { className: 'building-info-output-row' }, [
+    lucideIcon('list', 12),
+    document.createTextNode(` 生产队列 ${summary.queue.length}/3`),
+  ]));
+  for (const job of summary.queue) {
+    const progress = Math.max(0, Math.min(100, ((job.totalDays - job.remainingDays) / job.totalDays) * 100));
+    section.appendChild(createElement('div', { className: 'production-job' }, [
+      createElement('div', { className: 'production-job-header' }, [
+        createElement('strong', {}, [job.recipe?.name || job.recipeId]),
+        createElement('span', {}, [`还需 ${Math.ceil(job.remainingDays)} 天`]),
+      ]),
+      createElement('div', { className: 'production-progress' }, [
+        createElement('span', { style: { width: `${progress}%` } }),
+      ]),
+    ]));
+  }
+
+  panel.appendChild(section);
+}
+
 function openBuildingInfoPanel(building) {
   const data = getBuildingById(building.buildingId);
   if (!data) return;
@@ -785,48 +893,22 @@ function openBuildingInfoPanel(building) {
     panel.appendChild(gravSection);
   }
 
-  // 自动加工信息与开关
-  if (building.built) {
-    const autoStatuses = getBuildingAutoProductionStatus(building);
-    if (autoStatuses.length > 0) {
-      const autoSection = createElement('div', { className: 'building-info-section' });
-      autoSection.appendChild(createElement('h4', {}, ['自动加工']));
-      const RESOURCE_LABELS = {
-        metal: '金属', crystal: '晶体', energy: '能量', food: '食物',
-        alloy: '星尘合金', crystal_circuit: '晶体电路', nutrient_pack: '营养补给包',
-        energy_cell: '能量电池', bio_sample: '生态标本',
-      };
-      for (const status of autoStatuses) {
-        const { recipe, enabled, active, progress } = status;
-        const row = createElement('div', { className: `building-info-auto-row ${enabled ? '' : 'disabled'}` });
-        const inputsText = Object.entries(recipe.inputs)
-          .map(([id, amount]) => `${RESOURCE_LABELS[id] || id} ${amount}`)
-          .join(' + ');
-        row.appendChild(createElement('div', { className: 'building-info-auto-detail' }, [
-          createElement('strong', {}, [recipe.name]),
-          createElement('div', {}, [`${inputsText} → ${recipe.output.name} ×${recipe.output.quantity}`]),
-          enabled && active
-            ? createElement('div', { className: 'building-info-auto-progress' }, [`加工中 ${Math.min(100, Math.round(progress * 100))}%`])
-            : !enabled
-              ? createElement('div', { className: 'building-info-auto-progress muted' }, ['已暂停'])
-              : createElement('div', { className: 'building-info-auto-progress muted' }, ['等待原料']),
-        ]));
-        const toggleBtn = createElement('button', {
-          className: `btn btn-sm ${enabled ? 'btn-active' : 'btn-muted'}`,
-          title: enabled ? '关闭自动加工' : '开启自动加工',
-        }, [
-          lucideIcon(enabled ? 'toggle-right' : 'toggle-left', 16),
-          document.createTextNode(enabled ? ' 开' : ' 关'),
-        ]);
-        toggleBtn.addEventListener('click', () => {
-          toggleBuildingAutoProduction(building, recipe.id);
-          openBuildingInfoPanel(building); // 刷新面板
-        });
-        row.appendChild(toggleBtn);
-        autoSection.appendChild(row);
-      }
-      panel.appendChild(autoSection);
-    }
+  // 建筑储备：生产建筑展示各自储备上限与当前占用
+  const producesHaulable = ['metal', 'crystal', 'energy', 'food'].some((k) => (data.effect?.[k] || 0) > 0);
+  if (building.built && producesHaulable) {
+    const buffer = getBuildingBufferStatus(building);
+    const bufferSection = createElement('div', { className: 'building-info-section' });
+    bufferSection.appendChild(createElement('h4', {}, ['储备']));
+    bufferSection.appendChild(createElement('div', { className: 'building-info-output-row' }, [
+      lucideIcon('box', 14),
+      document.createTextNode(` ${buffer.total}/${buffer.capacity}${buffer.full ? ' · 已满，需搬运' : ''}`),
+    ]));
+    panel.appendChild(bufferSection);
+  }
+
+  // 综合工坊：加工配置（选择配方与自动生产都放在建筑自己的子页里）
+  if (building.built && building.buildingId === 'workshop') {
+    renderWorkshopSection(panel, building);
   }
 
   // 按钮区

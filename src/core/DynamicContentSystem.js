@@ -8,13 +8,14 @@ import { aiClient } from '../ai/AIClient.js';
 import { createAITriggerState, recordMilestone, updateShortages, canCreateProposal, markTriggered } from './AITriggerSystem.js';
 
 const DIMS = ['food', 'knowledge', 'comfort', 'adventure', 'culture', 'nature'];
-const FORBIDDEN = /战斗|敌人|伤害|死亡|武器|战争|摧毁|惩罚/;
+const FORBIDDEN = /死亡|毁灭|战争|血腥|不可逆摧毁|永久死亡|惩罚性清零/;
 const CATEGORIES = new Set(['basic', 'food', 'science', 'culture', 'special']);
 const ICONS = new Set(['sparkles', 'factory', 'sprout', 'flask-conical', 'landmark', 'gem', 'sun', 'snowflake', 'leaf', 'radio', 'orbit', 'waves']);
 
 function contentState() {
-  if (!gameState.state.aiContent) gameState.state.aiContent = { enabled: true, pending: [], acceptedBuildings: [], acceptedCombos: [], acceptedSpecies: [], acceptedTechs: [], lastGeneratedDay: {}, triggers: createAITriggerState() };
+  if (!gameState.state.aiContent) gameState.state.aiContent = { enabled: true, pending: [], acceptedBuildings: [], acceptedCombos: [], acceptedSpecies: [], acceptedTechs: [], acceptedCards: [], lastGeneratedDay: {}, triggers: createAITriggerState() };
   if (!gameState.state.aiContent.acceptedTechs) gameState.state.aiContent.acceptedTechs = [];
+  if (!gameState.state.aiContent.acceptedCards) gameState.state.aiContent.acceptedCards = [];
   gameState.state.aiContent.triggers = createAITriggerState(gameState.state.aiContent.triggers);
   return gameState.state.aiContent;
 }
@@ -71,6 +72,28 @@ export function validateSpeciesProposal(raw) {
   return { ok: true, value: { id, name: raw.name.trim(), homeworld: raw.homeworld.trim(), icon: ICONS.has(raw.icon) ? raw.icon : 'sparkles', color: /^#[0-9a-f]{6}$/i.test(raw.color) ? raw.color : '#8FB8D8', lore: raw.lore.trim(), trait: raw.trait.trim(), personality: raw.personality.trim(), gravityPreference, tiers: [{ level: 20, name: '初次交流', reward: '获得友好纪念品' }, { level: 50, name: '文化互访', reward: '旅游收入小幅提升' }, { level: 80, name: '深度理解', reward: '获得独特装饰' }], funfact: raw.funfact.trim(), initialReputation: 10, generated: true } };
 }
 
+export function validateCardProposal(raw) {
+  if (!raw || !text(raw.name, 16) || !text(raw.desc, 80) || !text(raw.flavor, 60)) return { ok: false, reason: '卡牌文本无效' };
+  const validTypes = ['combat', 'engineering', 'research', 'farming', 'survival', 'social'];
+  if (!validTypes.includes(raw.type)) return { ok: false, reason: '卡牌类型无效' };
+  const value = Math.max(5, Math.min(10, Math.round(Number(raw.value) || 8)));
+  const icon = ICONS.has(raw.icon) ? raw.icon : (raw.type === 'combat' ? 'swords' : raw.type === 'engineering' ? 'wrench' : raw.type === 'research' ? 'flask-conical' : raw.type === 'farming' ? 'sprout' : raw.type === 'survival' ? 'tent' : 'users');
+  return {
+    ok: true,
+    value: {
+      id: slug('card', raw.name),
+      name: raw.name.trim(),
+      type: raw.type,
+      value,
+      icon,
+      desc: raw.desc.trim(),
+      flavor: raw.flavor.trim(),
+      generated: true,
+      sourceDrop: true,
+    },
+  };
+}
+
 export function validateTechProposal(raw) {
   if (!raw || !text(raw.name, 18) || !text(raw.desc, 120) || !text(raw.flavor, 80)) return { ok: false, reason: '科技文本无效' };
   if (TECHS.some(item => item.name === raw.name)) return { ok: false, reason: '科技名称重复' };
@@ -111,6 +134,12 @@ function fallback(type) {
     const prereq = researchedIds.length ? [researchedIds[researchedIds.length - 1]] : [];
     return { name: `星际协议${techIndex}型`, desc: '整合殖民地现有技术积累，开辟新的研究方向。', flavor: '每一次突破都始于一个大胆的假设。', tier: 2, cost: { research: 40 + techIndex * 10 }, prereqs: prereq, unlocks: ['新型设施蓝图'], gravity: { food: 0, knowledge: 4, comfort: 1, adventure: 2, culture: 1, nature: 0 } };
   }
+  if (type === 'card_proposal') {
+    const cardIndex = (state.acceptedCards?.length || 0) + state.pending.filter(item => item.type === 'card_proposal').length + 1;
+    const types = ['combat', 'engineering', 'research', 'farming', 'survival', 'social'];
+    const pType = types[cardIndex % types.length];
+    return { name: `古代遗珍${cardIndex}号`, type: pType, value: 8, icon: 'sparkles', desc: '记录了先驱者开拓经验的异星记忆晶体。', flavor: '知识跨越光年，在此刻重新发光。' };
+  }
   return { comment: '这些设施的引力彼此呼应，继续观察布局变化，也许会出现新的协同。' };
 }
 
@@ -131,7 +160,11 @@ export async function generateProposal(type, instruction = '') {
     generating.delete(type);
   }
   if (type === 'combo_comment') return { ok: true, value: raw.comment || fallback(type).comment };
-  const validator = type === 'building_proposal' ? validateBuildingProposal : type === 'combo_proposal' ? validateComboProposal : type === 'tech_proposal' ? validateTechProposal : validateSpeciesProposal;
+  const validator = type === 'building_proposal' ? validateBuildingProposal
+    : type === 'combo_proposal' ? validateComboProposal
+    : type === 'tech_proposal' ? validateTechProposal
+    : type === 'card_proposal' ? validateCardProposal
+    : validateSpeciesProposal;
   const result = validator(raw);
   if (!result.ok) return result;
   const item = proposal(type, result.value);
@@ -148,6 +181,18 @@ export function acceptProposal(id) {
   if (item.type === 'building_proposal') { BUILDINGS.push(item.content); state.acceptedBuildings.push(item.content); }
   else if (item.type === 'combo_proposal') { BUILDING_COMBOS.push(item.content); state.acceptedCombos.push(item.content); }
   else if (item.type === 'tech_proposal') { TECHS.push(item.content); state.acceptedTechs.push(item.content); }
+  else if (item.type === 'card_proposal') {
+    if (!state.acceptedCards) state.acceptedCards = [];
+    state.acceptedCards.push(item.content);
+    if (!gameState.state.cards) gameState.state.cards = { unlocked: [], dynamicCards: [] };
+    if (!gameState.state.cards.dynamicCards) gameState.state.cards.dynamicCards = [];
+    if (!gameState.state.cards.dynamicCards.some((c) => c.id === item.content.id)) {
+      gameState.state.cards.dynamicCards.push(item.content);
+    }
+    if (!gameState.state.cards.unlocked.includes(item.content.id)) {
+      gameState.state.cards.unlocked.push(item.content.id);
+    }
+  }
   else if (item.type === 'species_proposal') { SPECIES.push(item.content); state.acceptedSpecies.push(item.content); gameState.state.diplomacy[item.content.id] = { reputation: item.content.initialReputation, contacted: true }; }
   state.pending = state.pending.filter(entry => entry.id !== id);
   bus.emit('ai-content:accepted', item);
@@ -192,14 +237,52 @@ export function handleAIContentMilestone(kind, id, instruction = '') {
 export function updateDynamicContent() {
   const state = contentState();
   if (!state.enabled) return;
+  // 仅对真实事件/条件作出反应（资源短缺），不再按时间表主动生成内容。
   for (const resource of updateShortages(state.triggers, gameState.state.resources, gameState.state.day)) {
     bus.emit('ai:shortage', { resource });
     requestTriggeredProposal('building_proposal', `殖民地${resource}已持续短缺，请提出温和的支持设施`);
   }
-  const day = gameState.state.day;
-  const due = (type, interval) => day - (state.lastGeneratedDay[type] || 0) >= interval;
-  if (day >= 60 && due('building_proposal', 120)) requestTriggeredProposal('building_proposal', '提供一个符合当前发展阶段的设施');
-  else if (gameState.state.researchedTechs.length >= 3 && due('tech_proposal', 150)) requestTriggeredProposal('tech_proposal', '根据已研究科技提出新的研究课题，prereqs应引用已研究的科技ID');
-  else if (gameState.state.buildings.length >= 6 && due('combo_proposal', 90)) requestTriggeredProposal('combo_proposal', '根据现有设施提出布局组合');
-  else if ((gameState.state.exploredRegions.includes('signal_source') || gameState.state.year >= 2) && due('species_proposal', 240)) requestTriggeredProposal('species_proposal', '提出一个和平友好的访客种族');
+}
+
+/**
+ * 月度组合自动检查：AI 根据当前已建成设施提出布局组合并自动采纳。
+ * 只在月度结算时调用一次；组合仅能引用已建成设施，效果由本地模板确定。
+ */
+export async function runMonthlyComboCheck() {
+  const state = contentState();
+  if (!state.enabled) return { ok: false, reason: 'AI 内容生成已关闭' };
+
+  const builtIds = [...new Set((gameState.state.buildings || [])
+    .filter((b) => b.built && b.buildingId !== 'road' && b.buildingId !== 'landing_pad')
+    .map((b) => b.buildingId))];
+  if (builtIds.length < 2) return { ok: false, reason: '已建成设施不足' };
+
+  const builtBuildings = BUILDINGS.filter((b) => builtIds.includes(b.id));
+  const ctx = {
+    instruction: '根据当前已建成设施提出一个布局组合，buildingIds 只能从给出的已建成设施中选择',
+    day: gameState.state.day,
+    buildings: builtBuildings.map(({ id, name, category }) => ({ id, name, category })),
+    builtIds,
+  };
+  const fallback = () => ({
+    name: `月度协同${builtIds.length}型`,
+    description: '本月布局自然形成的协同，参与设施共享维护经验。',
+    buildingIds: builtIds.slice(0, 4),
+    effectKind: 'output',
+  });
+
+  const raw = await aiClient.generate('combo_proposal', ctx, fallback, { cache: false });
+  const result = validateComboProposal(raw);
+  if (!result.ok) return result;
+
+  const combo = result.value;
+  if (!combo.buildingIds.every((id) => builtIds.includes(id))) {
+    return { ok: false, reason: '组合引用了未建成设施' };
+  }
+
+  BUILDING_COMBOS.push(combo);
+  state.acceptedCombos.push(combo);
+  state.lastGeneratedDay['combo_proposal'] = gameState.state.day;
+  bus.emit('ai-content:accepted', { type: 'combo_proposal', content: combo });
+  return { ok: true, combo };
 }

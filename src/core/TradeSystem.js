@@ -187,6 +187,27 @@ export function buyResource(resourceType, quantity) {
   return { ok: true, bought: canBuy, cost };
 }
 
+// ===== 出售资源换取星币 =====
+
+/** 基础资源出售价格（星币/单位） */
+export const RESOURCE_SELL_PRICES = { metal: 2, crystal: 5, energy: 1, food: 1 };
+
+/**
+ * 出售基础资源换取星币（通用动作，无建筑门槛）
+ * 物资只能卖或作为加工原料，这里提供「卖」的出口。
+ */
+export function sellResource(resourceType, quantity) {
+  if (!(resourceType in RESOURCE_SELL_PRICES)) return { ok: false, reason: '该资源不可出售' };
+  const available = gameState.state.resources[resourceType] || 0;
+  const qty = Math.min(Math.max(1, Math.floor(quantity)), available);
+  if (qty <= 0) return { ok: false, reason: '资源不足' };
+  const credits = qty * RESOURCE_SELL_PRICES[resourceType];
+  gameState.addResource(resourceType, -qty);
+  gameState.addResource('credits', credits);
+  bus.emit('trade:resource-sold', { resourceType, quantity: qty, credits });
+  return { ok: true, sold: qty, credits };
+}
+
 // ===== 宣传引流 =====
 
 /** 设置持续宣传档位 */

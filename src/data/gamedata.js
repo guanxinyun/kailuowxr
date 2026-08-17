@@ -157,6 +157,19 @@ export const EVENTS = [
     ],
     weight: 5, minDay: 60,
   },
+  {
+    id: 'recruit_wanderer',
+    name: '迷途殖民者',
+    type: 'exploration',
+    icon: 'users',
+    narrative: '探索队在殖民地边缘发现了一艘坠毁的救生舱，舱内是一名陷入休眠的迷途殖民者。他苏醒后表示愿意加入你的殖民地。',
+    choices: [
+      { text: '欢迎加入殖民地', effect: { recruit: 1 }, result: '新居民正式加入！殖民地又多了一位成员。' },
+      { text: '提供补给，送他离开', effect: { food: -3, happiness: 2 }, result: '你赠予了补给。他道谢后独自踏上旅程，居民们为这份善意感到欣慰。' },
+    ],
+    weight: 7,
+    minDay: 5,
+  },
 ];
 
 // ===== 地图瓦片类型 =====

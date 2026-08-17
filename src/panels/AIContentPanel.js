@@ -5,7 +5,7 @@ import { createElement, lucideIcon } from '../core/utils.js';
 import { acceptProposal, generateProposal, rejectProposal } from '../core/DynamicContentSystem.js';
 import { aiClient } from '../ai/AIClient.js';
 
-const LABELS = { building_proposal: '新建筑', combo_proposal: '新组合', species_proposal: '新外星种族', tech_proposal: '新科技' };
+const LABELS = { building_proposal: '新建筑', combo_proposal: '新组合', species_proposal: '新外星种族', tech_proposal: '新科技', card_proposal: '新技能卡牌' };
 
 export function openAIContentPanel() {
   const container = createElement('div', { className: 'ai-content-panel' });
@@ -31,7 +31,7 @@ export function openAIContentPanel() {
       toggle,
     ]));
 
-    const endpoint = createElement('input', { className: 'settings-pack-name', type: 'url', placeholder: 'OpenAI兼容接口，如 http://localhost:11434/v1/chat/completions', value: endpointValue });
+    const endpoint = createElement('input', { className: 'settings-pack-name', type: 'url', placeholder: 'OpenAI兼容接口，如 http://localhost:11434 或 https://api.deepseek.com/v1', value: endpointValue });
     const model = createElement('input', { className: 'settings-pack-name', type: 'text', placeholder: '模型名，如 qwen2.5:7b', value: modelValue, list: 'ai-model-list' });
     const modelList = createElement('datalist', { id: 'ai-model-list' }, availableModels.map(id => createElement('option', { value: id })));
     const apiKey = createElement('input', { className: 'settings-pack-name', type: 'password', placeholder: initialConfig?.hasKey ? 'Key 已在当前标签页保存；留空保持不变' : 'API Key（本地模型可留空）', value: apiKeyValue });
@@ -76,7 +76,7 @@ export function openAIContentPanel() {
     resetConnection.addEventListener('click', () => { aiClient.reset(); gameState.addNotification({ title: 'AI连接已重置', text: '失败计数已清零，将重新尝试在线模型。', type: 'success', icon: 'refresh-cw' }); render(); });
     container.appendChild(createElement('div', { className: 'ai-config-box' }, [
       createElement('h3', {}, ['玩家自己的 AI']), endpoint, model, modelList, apiKey,
-      createElement('div', { className: 'settings-hint' }, ['支持 HTTP/HTTPS OpenAI兼容 /chat/completions；自动从同一路径的 /models 获取模型。HTTPS页面调用远程HTTP可能被浏览器拦截；Key仅存sessionStorage。']),
+      createElement('div', { className: 'settings-hint' }, ['支持 HTTP/HTTPS OpenAI兼容接口；基础地址会自动补全 /chat/completions，并从同路径 /models 拉取模型。HTTPS页面调用远程HTTP可能被浏览器拦截；Key仅存sessionStorage。']),
       createElement('div', { className: 'ai-proposal-buttons' }, [saveConfig, fetchModels, testConnection, clearConfig, resetConnection]),
     ]));
 
@@ -109,7 +109,9 @@ export function openAIContentPanel() {
           ? `${content.buildingIds.join(' + ')} · ${content.effectText}`
           : item.type === 'tech_proposal'
             ? `${content.tier}阶 · 研究 ${content.cost.research} · ${content.unlocks.join('、')}`
-            : `${content.homeworld} · ${content.personality}`;
+            : item.type === 'card_proposal'
+              ? `${content.type} · 数值 ${content.value}`
+              : `${content.homeworld} · ${content.personality}`;
       const card = createElement('div', { className: 'ai-proposal-card' }, [
         createElement('div', { className: 'ai-proposal-header' }, [createElement('strong', {}, [content.name]), createElement('span', {}, [LABELS[item.type]])]),
         createElement('p', {}, [content.desc || content.description || content.lore]),
@@ -125,7 +127,7 @@ export function openAIContentPanel() {
     container.appendChild(pending);
 
     container.appendChild(createElement('div', { className: 'ai-content-accepted' }, [
-      `已接受：建筑 ${state.acceptedBuildings.length} · 组合 ${state.acceptedCombos.length} · 科技 ${(state.acceptedTechs || []).length} · 外星种族 ${state.acceptedSpecies.length}`,
+      `已接受：建筑 ${state.acceptedBuildings.length} · 组合 ${state.acceptedCombos.length} · 科技 ${(state.acceptedTechs || []).length} · 卡牌 ${(state.acceptedCards || []).length} · 外星种族 ${state.acceptedSpecies.length}`,
     ]));
   };
 

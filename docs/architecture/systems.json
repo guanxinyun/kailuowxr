@@ -102,7 +102,7 @@
       "id": "production",
       "name": "生产与加工",
       "status": "partial",
-      "summary": "综合工坊将基础资源加工为合金、电路、补给和纪念品；队列按游戏日推进并保存品质；建筑自动加工（×0.6速度，低品质）；autoQueue 支持产N个/持续模式。",
+      "summary": "综合工坊（唯一加工场所）将基础资源加工为合金、电路、补给和纪念品；队列按游戏日推进并保存品质；autoQueue 支持产N个/持续模式；加工配置在工坊建筑子页而非工具栏。",
       "owns": ["state.production", "生产配方", "加工队列"],
       "files": ["src/core/ProductionSystem.js", "src/data/production.js", "src/panels/ProductionPanel.js", "src/core/GameState.js"],
       "callers": ["src/main.js"],
@@ -135,17 +135,19 @@
       "id": "exploration",
       "name": "探索与地图拓展",
       "status": "implemented",
-      "summary": "8个特殊区域通过随机事件逐步解锁（nearby_caves默认），每区域仅一次，奖励在rewardPool范围内随机掷骰；另有无限随机考察任务。地图购买拓展，每次从已探索边缘向四周均匀扩散stripDepth层。无战斗。",
-      "owns": ["state.exploredRegions", "state.activeExploration", "state.unlockedRegions", "state.randomExpedition", "state.mapExpansion.count"],
-      "files": ["src/core/ExplorationSystem.js", "src/core/MapExpansionSystem.js", "src/panels/UtilityPanels.js", "src/data/gamedata.js", "src/core/GameState.js"],
+      "summary": "8个特殊区域通过随机事件逐步解锁（nearby_caves默认），每区域仅一次，奖励在rewardPool范围内随机掷骰；另有无限随机考察任务。初始探明区域为4×8矩形。地图按4×4分块，紧邻已探明区域、发暗标注「待探索」的区块点击后由玩家自选居民派遣（需花费星币），探索进度条随机位置触发好事/坏事（本地掷骰，AI只写叙事），奖励含研究点、特殊道具、建筑图纸与加工品图纸；被派遣居民期间无法工作。无战斗。",
+      "owns": ["state.exploredRegions", "state.activeExploration", "state.unlockedRegions", "state.randomExpedition", "state.mapExpansion.count", "state.blockExplorations", "state.blueprints"],
+      "files": ["src/core/ExplorationSystem.js", "src/core/MapExpansionSystem.js", "src/core/BlockExplorationSystem.js", "src/panels/UtilityPanels.js", "src/panels/BlockExplorationPanel.js", "src/data/gamedata.js", "src/core/GameState.js"],
       "callers": ["src/main.js", "src/panels/EventModal.js"],
       "exports": [
         {"file": "src/core/ExplorationSystem.js", "names": ["getExploreRegion", "unlockRegion", "generateRandomExpedition", "clearRandomExpedition", "canStartExpedition", "startExpedition", "updateExplorationSystem", "revealBiomeSector", "normalizeExplorationState"]},
         {"file": "src/core/MapExpansionSystem.js", "names": ["getExpansionCost", "canExpand", "purchaseExpansion"]},
+        {"file": "src/core/BlockExplorationSystem.js", "names": ["getBlockOf", "getBlockTiles", "getDispatchedResidentIds", "getAvailableResidents", "getExplorableBlocks", "getActiveBlockExploration", "canStartBlockExploration", "startBlockExploration", "updateBlockExplorations", "completeBlockExploration", "rollBlockEventOutcome"]},
         {"file": "src/panels/UtilityPanels.js", "names": ["openExplorePanel"]},
+        {"file": "src/panels/BlockExplorationPanel.js", "names": ["openBlockDispatchModal", "showBlockEventModal"]},
         {"file": "src/data/gamedata.js", "names": ["EXPLORE_REGIONS", "RANDOM_EXPEDITION_TEMPLATES", "MAP_EXPANSION"]}
       ],
-      "events": ["explore:started", "explore:completed", "explore:unlocked", "explore:narration", "map:expanded", "map:revealed"],
+      "events": ["explore:started", "explore:completed", "explore:unlocked", "explore:narration", "map:expanded", "map:revealed", "explore:block-started", "explore:block-completed", "explore:block-event"],
       "designRefs": ["设计总纲.txt#3.3 第三里程碑：探索与战斗", "设计文档.txt#第十部分：探索系统"]
     },
     {
@@ -187,7 +189,7 @@
       "callers": ["src/main.js"],
       "exports": [
         {"file":"src/ai/AIClient.js","names":["aiClient","getModelsEndpoint","getModelsPageEndpoint","normalizeModelList"]},
-        {"file":"src/core/AIContentFacts.js","names":["buildProductFacts","buildTouristFacts","buildExplorationFacts","buildDiaryFacts","buildAnnualFacts","getNarrationFallback"]},
+        {"file":"src/core/AIContentFacts.js","names":["buildProductFacts","buildTouristFacts","buildExplorationFacts","buildBlockEventFacts","buildDiaryFacts","buildAnnualFacts","getNarrationFallback"]},
         {"file":"src/core/AITriggerSystem.js","names":["createAITriggerState","recordMilestone","updateShortages","canCreateProposal","markTriggered"]},
         {"file":"src/core/DynamicContentSystem.js","names":["validateBuildingProposal","validateComboProposal","validateSpeciesProposal","generateProposal","acceptProposal","rejectProposal","restoreDynamicContent","updateDynamicContent","generateComboComment","handleAIContentMilestone"]},
         {"file":"src/panels/AIContentPanel.js","names":["openAIContentPanel"]}
@@ -214,7 +216,7 @@
       "id": "ui-panels",
       "name": "DOM 界面与面板",
       "status": "implemented",
-      "summary": "管理模态框、通知、顶栏、教程和功能面板；支持建筑完整图按比例裁剪、居民/游客四方向精灵表拼合、自动加工管理和 AI 接口配置。面板应调用系统接口而非拥有规则。",
+      "summary": "管理模态框、通知、顶栏、教程和功能面板；支持建筑完整图按比例裁剪、居民/游客四方向精灵表拼合、工坊加工配置和 AI 接口配置。面板应调用系统接口而非拥有规则。",
       "owns": ["DOM 与交互临时状态"],
       "files": ["src/core/UIManager.js", "src/core/TutorialManager.js", "src/panels/BuildPanel.js", "src/panels/TechPanel.js", "src/panels/ResidentPanel.js", "src/panels/DiplomacyPanel.js", "src/panels/AnnualPanel.js", "src/panels/EventModal.js", "src/panels/UtilityPanels.js", "src/panels/BuildingManagementPanel.js", "src/panels/AIContentPanel.js", "src/panels/TextureCropModal.js", "src/panels/SpriteFaceModal.js"],
       "callers": ["src/main.js"],

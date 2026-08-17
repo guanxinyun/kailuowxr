@@ -290,3 +290,248 @@
   background: rgba(231,76,60,0.08);
   border: 1px solid rgba(231,76,60,0.3);
 }
+
+/* ---- 卡牌小游戏 ---- */
+.card-game-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.card-game-header {
+  text-align: center;
+  padding-bottom: var(--sp-2);
+}
+.card-game-title {
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-bold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  margin-bottom: var(--sp-1);
+}
+.card-game-title svg {
+  color: var(--color-adventure);
+  stroke-width: 2;
+}
+.card-game-narrative {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  line-height: 1.6;
+  padding: var(--sp-2);
+  background: rgba(255,255,255,0.02);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--color-adventure);
+}
+
+.card-game-progress {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: var(--sp-1) 0;
+}
+.card-game-round-dot {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: var(--fw-bold);
+  transition: all var(--transition-fast);
+}
+.card-game-round-dot.done {
+  background: var(--color-success);
+  color: #fff;
+}
+.card-game-round-dot.active {
+  background: var(--color-adventure);
+  color: #fff;
+  box-shadow: 0 0 8px rgba(231,76,60,0.5);
+}
+.card-game-round-dot.pending {
+  background: rgba(255,255,255,0.06);
+  color: var(--text-dim);
+  border: 1px solid var(--border-subtle);
+}
+.card-game-round-line {
+  width: 28px; height: 2px;
+  background: var(--border-subtle);
+  margin: 0 2px;
+}
+
+.card-game-requirement {
+  text-align: center;
+  padding: var(--sp-2);
+  background: rgba(255,255,255,0.03);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+}
+.card-game-req-label {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+.card-game-req-icon {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 4px;
+  color: var(--text-accent);
+}
+.card-game-req-value {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-bold);
+  color: var(--text-primary);
+}
+
+/* 手牌 */
+.card-game-hand {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  justify-content: center;
+  padding: var(--sp-2) 0;
+  min-height: 80px;
+}
+
+.card-game-card {
+  width: 80px;
+  padding: var(--sp-2) var(--sp-1);
+  border-radius: var(--radius-md);
+  background: var(--card-bg, rgba(255,255,255,0.04));
+  border: 2px solid var(--card-border, var(--border-subtle));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  transition: all var(--transition-fast);
+  user-select: none;
+}
+.card-game-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.card-game-card.selected {
+  transform: translateY(-6px) scale(1.05);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.4), 0 0 12px var(--card-border);
+  border-color: var(--card-text);
+}
+.card-game-card.special {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(255, 215, 0, 0.7);
+}
+.card-game-card.special::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.25),
+    transparent
+  );
+  background-size: 200% 100%;
+  animation: cardShimmer 2.5s infinite linear;
+  pointer-events: none;
+}
+
+.card-game-card.relic {
+  animation: relicGlow 2.8s infinite ease-in-out;
+}
+
+.card-game-card-icon {
+  width: 24px; height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.card-game-card-icon svg {
+  color: var(--card-text, var(--text-primary));
+  stroke-width: 1.5;
+}
+.card-game-card-value {
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-black);
+  color: var(--card-text, var(--text-primary));
+  line-height: 1;
+}
+.card-game-card-value.special {
+  text-shadow: 0 0 6px var(--card-text);
+}
+.card-game-card-label {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+.card-game-card-resident {
+  font-size: 9px;
+  color: var(--text-dim);
+  opacity: 0.7;
+  max-width: 72px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 操作区 */
+.card-game-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--border-subtle);
+}
+.card-game-hint {
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+}
+
+/* 轮次判定 */
+.card-game-round-result {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-bold);
+  padding: var(--sp-2);
+  border-radius: var(--radius-md);
+}
+.card-game-round-result.win {
+  color: var(--color-success);
+  background: rgba(46,204,113,0.08);
+}
+.card-game-round-result.lose {
+  color: var(--color-adventure);
+  background: rgba(231,76,60,0.08);
+}
+
+/* 结算 */
+.card-game-summary {
+  text-align: center;
+  padding: var(--sp-4) 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  animation: scaleIn 300ms ease;
+}
+.card-game-summary-icon {
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(100,140,255,0.1);
+  color: var(--text-accent);
+}
+.card-game-summary-title {
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-bold);
+}
+.card-game-summary-desc {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  max-width: 320px;
+}

@@ -97,3 +97,52 @@ export function getMoodColor(mood) {
   if (mood >= 20) return '#E67E22';
   return '#E74C3C';
 }
+
+/**
+ * 生成一名随机新居民（手动招募用）。
+ * @param {number} day 当前游戏天数
+ * @param {number} index 用于生成稳定 id 的序号
+ */
+export function createRandomResident(day, index) {
+  const name = RESIDENT_NAME_POOL[Math.floor(Math.random() * RESIDENT_NAME_POOL.length)];
+  const traits = [];
+  const traitCount = 1 + Math.floor(Math.random() * 2);
+  for (let i = 0; i < traitCount; i++) {
+    const t = TRAIT_POOL[Math.floor(Math.random() * TRAIT_POOL.length)];
+    if (!traits.includes(t)) traits.push(t);
+  }
+
+  return {
+    id: `res_${String(index).padStart(3, '0')}`,
+    name,
+    title: '殖民者',
+    icon: 'user',
+    level: 1,
+    traits,
+    gravityPreference: {
+      food: 3 + Math.floor(Math.random() * 5),
+      knowledge: 2 + Math.floor(Math.random() * 5),
+      comfort: 3 + Math.floor(Math.random() * 4),
+      adventure: 2 + Math.floor(Math.random() * 5),
+      culture: 2 + Math.floor(Math.random() * 4),
+      nature: 2 + Math.floor(Math.random() * 5),
+    },
+    skills: {
+      engineering: 1 + Math.floor(Math.random() * 4),
+      research: 1 + Math.floor(Math.random() * 4),
+      farming: 1 + Math.floor(Math.random() * 4),
+      combat: 1 + Math.floor(Math.random() * 4),
+      social: 1 + Math.floor(Math.random() * 4),
+      survival: 1 + Math.floor(Math.random() * 4),
+    },
+    xp: 0,
+    stamina: 10,
+    labor: 10,
+    exploration: 10,
+    proficiency: { engineering: 0, research: 0, farming: 0, social: 0, survival: 0 },
+    housingStage: 1,
+    growthLog: [],
+    mood: 70,
+    diary: [`第${day}天：我来到了星尘殖民地，这里将是我的新家。`],
+  };
+}

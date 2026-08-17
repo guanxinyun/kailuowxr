@@ -56,9 +56,6 @@ export function openCropModal(sourceImage, targetW, targetH, opts = {}) {
   const cropRatio = isDiamond ? 1 : targetW / targetH;
 
   return new Promise((resolve) => {
-    let widthR = 2;
-    let depthR = 2;
-    let heightR = 3;
     let useCrop = false;
     const srcW = sourceImage.width || sourceImage.naturalWidth;
     const srcH = sourceImage.height || sourceImage.naturalHeight;
@@ -90,7 +87,7 @@ export function openCropModal(sourceImage, targetW, targetH, opts = {}) {
       const previewSize = 128;
       previewCanvas = createElement('canvas', {
         width: previewSize,
-        height: isDiamond ? previewSize / 2 : previewSize,
+        height: isDiamond ? previewSize / 2 : isBuilding ? Math.round(previewSize * targetH / targetW) : previewSize,
         className: 'crop-preview-canvas',
       });
       previewCtx = previewCanvas.getContext('2d');
@@ -181,7 +178,7 @@ export function openCropModal(sourceImage, targetW, targetH, opts = {}) {
           }
           previewCtx.save();
           previewCtx.imageSmoothingEnabled = true;
-          drawContainedImage(previewCtx, image, pw, ph, { frame: { widthR, depthR, heightR } });
+          drawContainedImage(previewCtx, image, pw, ph, { bottomCenter: true });
           previewCtx.restore();
         }
       }
@@ -309,31 +306,6 @@ export function openCropModal(sourceImage, targetW, targetH, opts = {}) {
       draw();
     }, { passive: false });
 
-    const sliders = createElement('div', { className: 'face-sliders' });
-    if (isBuilding) {
-      const createSlider = (label, min, max, step, value, onChange) => {
-        const valueLabel = createElement('span', { className: 'face-slider-value' }, [value.toFixed(1)]);
-        const range = createElement('input', {
-          type: 'range', min: String(min), max: String(max), step: String(step), value: String(value),
-          className: 'face-slider-input',
-        });
-        range.addEventListener('input', () => {
-          const next = Number(range.value);
-          valueLabel.textContent = next.toFixed(1);
-          onChange(next);
-          draw();
-        });
-        return createElement('div', { className: 'face-slider-row' }, [
-          createElement('span', { className: 'face-slider-label' }, [label]), range, valueLabel,
-        ]);
-      };
-      sliders.append(
-        createSlider('宽度', 0.5, 2, 0.1, widthR, value => { widthR = value; }),
-        createSlider('深度', 0.5, 2, 0.1, depthR, value => { depthR = value; }),
-        createSlider('高度', 1, 3, 0.1, heightR, value => { heightR = value; }),
-      );
-    }
-
     // ===== 按钮 =====
     const confirmBtn = createElement('button', { className: 'btn btn-primary' }, [
       lucideIcon('crop', 14), document.createTextNode(isDiamond ? ' 确认（等距投影）' : isBuilding ? ' 确认导入' : ' 确认裁剪'),
@@ -356,7 +328,7 @@ export function openCropModal(sourceImage, targetW, targetH, opts = {}) {
           cropped.getContext('2d').drawImage(sourceImage, crop.x, crop.y, crop.w, crop.h, 0, 0, crop.w, crop.h);
           image = cropped;
         }
-        drawContainedImage(outCtx, image, targetW, targetH, { frame: { widthR, depthR, heightR } });
+        drawContainedImage(outCtx, image, targetW, targetH, { bottomCenter: true });
       } else {
         outCtx.drawImage(sourceImage, crop.x, crop.y, crop.w, crop.h, 0, 0, targetW, targetH);
       }
@@ -394,9 +366,9 @@ export function openCropModal(sourceImage, targetW, targetH, opts = {}) {
 
     const shapeHint = isDiamond
       ? '（正方形→等距菱形投影）'
-      : isBuilding ? '（保持比例，不做等距投影）' : '';
+      : isBuilding ? '（等距建筑，底部中心对齐地块中心）' : '';
     const info = createElement('div', { className: 'crop-info' }, [
-      `原图 ${srcW}×${srcH} → 输出 ${targetW}×${targetH}${shapeHint}　宽/深/高控制最终尺寸；需要裁剪时拖拽或滚轮调整后启用“使用裁剪区域”`,
+      `原图 ${srcW}×${srcH} → 输出 ${targetW}×${targetH}${shapeHint}　需要裁剪时拖拽或滚轮调整后启用“使用裁剪区域”`,
     ]);
 
     const controls = createElement('div', { className: 'crop-controls' }, [
@@ -404,7 +376,6 @@ export function openCropModal(sourceImage, targetW, targetH, opts = {}) {
     ]);
 
     const children = [info];
-    if (isBuilding) children.push(sliders);
     if ((isDiamond || isBuilding) && previewCanvas) {
       const canvasRow = createElement('div', { className: 'crop-canvas-row' }, [
         canvas,

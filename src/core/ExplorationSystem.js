@@ -3,6 +3,7 @@ import { gameState } from './GameState.js';
 import { EXPLORE_REGIONS, RANDOM_EXPEDITION_TEMPLATES, RESOURCES } from '../data/gamedata.js';
 import { addInventory, getInventoryQuantity } from './ProductionSystem.js';
 import { addResidentExperience, normalizeResidentGrowth } from './ResidentGrowthSystem.js';
+import { assignWorkers } from './BuildingSystem.js';
 import { aiClient } from '../ai/AIClient.js';
 import { buildExplorationFacts, getNarrationFallback } from './AIContentFacts.js';
 
@@ -111,6 +112,8 @@ export function startExpedition(regionId, residentId) {
     totalDays: duration,
     isRandom: !!region.isRandom,
   };
+  // 被派遣的居民暂时无法工作
+  assignWorkers();
   const facts = buildExplorationFacts(region, resident, 'started');
   const fallback = getNarrationFallback('exploration_log', facts);
   bus.emit('explore:started', { region, resident, exploration: gameState.state.activeExploration, narration: fallback });
@@ -151,6 +154,8 @@ function completeExpedition(region, resident) {
   }
   addResidentExperience(resident, 35 + (region.difficulty || region.danger || 1) * 8, 'survival', `完成${region.name}`);
   gameState.state.activeExploration = null;
+  // 居民考察归来，恢复工作分配
+  assignWorkers();
   // 随机任务完成后清除，下次自动生成新的
   if (region.isRandom) clearRandomExpedition();
   const rewardSummary = rewardTexts.length ? `获得：${rewardTexts.join('、')}` : '';

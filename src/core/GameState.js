@@ -25,7 +25,7 @@ const DEFAULT_STATE = {
     energy: 50,
     food: 80,
     research: 0,
-    credits: 50,
+    credits: 3000,
   },
   storage: {
     metal: 500,
@@ -68,12 +68,15 @@ const DEFAULT_STATE = {
   // 引力热力图
   gravityOverlay: null, // null or dimension key
 
-  // 探索
+  // 探索与卡牌
   exploredRegions: [],
   activeExploration: null,
   unlockedRegions: ['nearby_caves'],
   randomExpedition: null,       // 当前可用的随机考察任务
   mapExpansion: { count: 0 },
+  blockExplorations: [],        // 区块探索任务 { id, bx, by, residentIds, totalDays, remainingDays, events }
+  blueprints: { buildings: [], products: [] }, // 探索获得的建筑/加工品图纸
+  cards: { unlocked: [] },      // 玩家解锁的通用技能卡牌 ID 列表
 
   // 生产与加工
   production: {
@@ -99,6 +102,9 @@ const DEFAULT_STATE = {
 
   // 通知队列
   notifications: [],
+
+  // 事件日志（供月度简报聚合；封顶条数）
+  eventLog: [],
 
   // 年终评比
   annualReview: null,
@@ -194,6 +200,21 @@ class GameState {
     return n;
   }
 
+  /**
+   * 记录一条事件到事件日志（供月度简报聚合）。
+   * @param {object} entry - { category, title, text, good?, meta? }
+   */
+  recordEvent(entry) {
+    const MAX_EVENT_LOG = 200;
+    const record = { day: this._state.day, year: this._state.year, ...entry };
+    this._state.eventLog.push(record);
+    if (this._state.eventLog.length > MAX_EVENT_LOG) {
+      this._state.eventLog = this._state.eventLog.slice(-MAX_EVENT_LOG);
+    }
+    bus.emit('event:logged', record);
+    return record;
+  }
+
   getCurrentSeason() {
     return SEASONS[this._state.season];
   }
@@ -243,6 +264,12 @@ class GameState {
         : ['nearby_caves', ...(loaded.exploredRegions || [])];
       loaded.randomExpedition = loaded.randomExpedition || null;
       loaded.mapExpansion = { count: 0, ...(loaded.mapExpansion || {}) };
+      loaded.blockExplorations = Array.isArray(loaded.blockExplorations) ? loaded.blockExplorations : [];
+      loaded.eventLog = Array.isArray(loaded.eventLog) ? loaded.eventLog : [];
+      loaded.blueprints = {
+        buildings: Array.isArray(loaded.blueprints?.buildings) ? loaded.blueprints.buildings : [],
+        products: Array.isArray(loaded.blueprints?.products) ? loaded.blueprints.products : [],
+      };
       loaded.production = {
         inventory: {},
         queue: [],

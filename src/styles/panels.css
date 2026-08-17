@@ -547,6 +547,19 @@
 .btn-danger { background: rgba(220,60,60,0.15); color: #e55; border: 1px solid rgba(220,60,60,0.3); }
 .btn-danger:hover { background: rgba(220,60,60,0.25); }
 
+/* 自动加工工坊选择器 */
+.production-workshop-row {
+  display: flex; align-items: center; gap: var(--sp-2);
+  margin: var(--sp-2) 0; font-size: var(--fs-xs);
+}
+.production-workshop-label { color: var(--text-secondary); }
+.production-workshop-select {
+  padding: 3px 6px;
+  background: var(--bg-card); color: var(--text-primary);
+  border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+}
+
 /* ======== 外交面板 ======== */
 .diplomacy-panel .modal-body {
   padding: var(--sp-4) var(--sp-6);

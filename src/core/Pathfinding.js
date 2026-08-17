@@ -26,17 +26,30 @@ export function hasRoad(map, x, y) {
 }
 
 /**
+ * 判断居民是否可通行：只走道路，建筑地块作为进出目的地。
+ */
+export function isRoadWalkable(map, x, y) {
+  if (y < 0 || y >= map.length || x < 0 || x >= map[0].length) return false;
+  const tile = map[y][x];
+  if (!tile.explored) return false;
+  if (tile.building === 'road') return true;
+  if (tile.building) return true; // 建筑地块可进入
+  return false;
+}
+
+/**
  * A* 寻路算法
  * @param {Array} map - 2D地图数组 map[y][x]
  * @param {number} sx - 起点x
  * @param {number} sy - 起点y
  * @param {number} ex - 终点x
  * @param {number} ey - 终点y
+ * @param {Function} walkable - 通行判定函数，默认 isWalkable
  * @returns {Array|null} 路径点数组 [{x,y},...] 或 null
  */
-export function findPath(map, sx, sy, ex, ey) {
+export function findPath(map, sx, sy, ex, ey, walkable = isWalkable) {
   // 边界检查
-  if (!isWalkable(map, sx, sy) || !isWalkable(map, ex, ey)) return null;
+  if (!walkable(map, sx, sy) || !walkable(map, ex, ey)) return null;
   if (sx === ex && sy === ey) return [{ x: ex, y: ey }];
 
   const MAX_NODES = 500;
@@ -96,7 +109,7 @@ export function findPath(map, sx, sy, ex, ey) {
       const nk = key(nx, ny);
 
       if (closedSet.has(nk)) continue;
-      if (!isWalkable(map, nx, ny)) continue;
+      if (!walkable(map, nx, ny)) continue;
 
       // 道路上移动成本更低
       const moveCost = hasRoad(map, nx, ny) ? 0.5 : 1.0;
@@ -116,6 +129,13 @@ export function findPath(map, sx, sy, ex, ey) {
   }
 
   return null; // 无路径
+}
+
+/**
+ * 沿道路寻路（居民专用）。
+ */
+export function findRoadPath(map, sx, sy, ex, ey) {
+  return findPath(map, sx, sy, ex, ey, isRoadWalkable);
 }
 
 /**
