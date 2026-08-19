@@ -10,6 +10,7 @@ import { createElement, lucideIcon } from '../core/utils.js';
 import { generateAIEvent, validateEventProposal, fallbackEvent } from '../core/AIEventSystem.js';
 import { showEventModal, triggerHardcodedEvent } from './EventModal.js';
 import { showBlockEventModal } from './BlockExplorationPanel.js';
+import { buildAITextLog } from './AITextLog.js';
 
 const TYPE_META = {
   discovery: { label: '发现', icon: 'radio' },
@@ -119,6 +120,9 @@ export function openDebugPanel() {
     });
     setStatus('已触发卡牌挑战', 'var(--color-success)');
   }));
+
+  container.appendChild(section('AI 文本日志', 'scroll'));
+  container.appendChild(buildAITextLog());
 
   container.appendChild(status);
 

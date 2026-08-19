@@ -5,6 +5,7 @@ import { createElement, lucideIcon } from '../core/utils.js';
 import { acceptProposal, startAIResearchProject, rejectProposal } from '../core/DynamicContentSystem.js';
 import { aiClient } from '../ai/AIClient.js';
 import { sound } from '../core/SoundSystem.js';
+import { buildAITextLog } from './AITextLog.js';
 
 const LABELS = {
   building_proposal: '新建筑',
@@ -217,6 +218,10 @@ export function openAIContentPanel() {
     updateProposals();
     container.appendChild(pending);
     container.appendChild(acceptedCount);
+
+    // AI 文本日志（手机端也可从 AI 工坊进入查看每次收到的 AI 文本）
+    container.appendChild(createElement('h3', { style: { marginTop: '18px' } }, ['AI 文本日志']));
+    container.appendChild(buildAITextLog());
 
     return {
       onDayAdvance: () => {

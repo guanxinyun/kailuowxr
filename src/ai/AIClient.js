@@ -1,3 +1,5 @@
+import { gameState } from '../core/GameState.js';
+
 const USER_CONFIG_KEY = 'stardust-ai-user-config';
 const TIMEOUT_MS = 15000;
 const FAILURE_LIMIT = 3;
@@ -175,6 +177,42 @@ class AIClient {
     this.status = 'offline';
     this.lastError = '';
     this._lastFailureTime = 0;
+    // 每次收到的 AI 文本日志（环形缓冲，供调试面板人工检查）
+    // 条目：{ time, type, source: 'online'|'error'|'fallback', text, error }
+    this.transcript = [];
+  }
+
+  /**
+   * 记录一次收到的 AI 文本（含成功、失败与降级），供人工排查
+   */
+  _log(entry) {
+    const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+    this.transcript.push({ time, ...entry });
+    if (this.transcript.length > 300) this.transcript.shift();
+    // 同步输出到控制台，方便在 DevTools 里直接搜
+    console.log(`[AI文本] ${time} [${entry.type}] ${entry.source}`, entry.error ? `⚠️${entry.error}` : '', '\n', entry.text);
+
+    // 出错时推一条游戏内通知，手机端也能直接看到原文
+    if (entry.notify) {
+      const raw = entry.rawText ? `\n${String(entry.rawText).slice(0, 260)}` : '';
+      gameState.addNotification({
+        title: `AI 出错 · ${entry.type}`,
+        text: `${entry.error || ''}${raw}`,
+        type: 'warning',
+        icon: 'alert-triangle',
+        duration: 9000,
+      });
+    }
+  }
+
+  clearTranscript() {
+    this.transcript = [];
+  }
+
+  /** 把响应（字符串或 JSON 对象）统一转成可读文本 */
+  _textOf(value) {
+    if (typeof value === 'string') return value;
+    try { return JSON.stringify(value, null, 2); } catch { return String(value); }
   }
 
   async generate(type, context, fallback, { cache = true } = {}) {
@@ -191,12 +229,16 @@ class AIClient {
 
     if (!onlineEndpointAvailable() || this.failures >= FAILURE_LIMIT || (typeof navigator !== 'undefined' && !navigator.onLine)) {
       this.status = 'fallback';
-      return fallback();
+      const text = fallback();
+      this._log({ type, source: 'fallback', text: this._textOf(text), error: '离线/未配置/失败次数超限，使用本地降级' });
+      return text;
     }
 
     const task = this._request(type, context).catch((err) => {
       this.lastError = err.message || String(err);
-      return fallback();
+      const text = fallback();
+      this._log({ type, source: 'fallback', text: this._textOf(text), error: `在线失败，改用本地降级：${this.lastError}`, notify: true, rawText: err?.rawText });
+      return text;
     }).finally(() => this.inFlight.delete(key));
     this.inFlight.set(key, task);
     const result = await task;
@@ -232,9 +274,23 @@ class AIClient {
       if (typeof raw !== 'string' || !raw.trim()) throw new Error('AI 响应格式错误');
       this.failures = 0;
       this.status = 'online';
-      if (!wantsJson) return raw.trim();
+      if (!wantsJson) {
+        const text = raw.trim();
+        this._log({ type, source: 'online', text });
+        return text;
+      }
       const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
-      return JSON.parse(cleaned);
+      try {
+        const parsed = JSON.parse(cleaned);
+        this._log({ type, source: 'online', text: cleaned });
+        return parsed;
+      } catch (err) {
+        // 记录原始返回，便于人工检查为何 JSON 解析失败
+        this._log({ type, source: 'error', text: cleaned, error: `JSON解析失败: ${err.message}` });
+        const parseErr = new Error(`AI 返回非法 JSON: ${err.message}`);
+        parseErr.rawText = cleaned;
+        throw parseErr;
+      }
     } catch (error) {
       this.failures++;
       this._lastFailureTime = Date.now();
