@@ -104,7 +104,7 @@ export function openAnnualPanel(reviewData = null) {
 
   const content = ui.createModalContent('年终评比', 'trophy', container);
   content.querySelector('.modal-body').classList.add('annual-panel');
-  ui.openModal(content, 'modal-lg');
+  ui.openModal(content, 'modal-lg', { priority: 10 });
 }
 
 function getGradeColor(grade) {

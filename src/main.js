@@ -568,8 +568,9 @@ function gameTick() {
         icon: 'wrench',
       });
     }
+    // 季报弹窗延迟展示，避免与同 tick 的年报/随机事件弹窗同步竞争导致互相挤掉
     const facts = buildMonthlyBriefingFacts(gameState.state);
-    showMonthlyBriefing(facts);
+    setTimeout(() => showMonthlyBriefing(facts), 100);
 
     // 季度组合自动检查（AI 根据已建成设施提出并采纳布局组合）
     runMonthlyComboCheck();

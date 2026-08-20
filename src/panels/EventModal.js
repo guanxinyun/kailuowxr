@@ -12,6 +12,7 @@ import { recruitResident } from '../core/HousingSystem.js';
 import { checkTierRewards } from '../core/TouristManager.js';
 import { generateAIEvent, shouldGenerateAIEvent } from '../core/AIEventSystem.js';
 import { rollBlueprint } from '../core/BlockExplorationSystem.js';
+import { generateProposal, acceptProposal } from '../core/DynamicContentSystem.js';
 
 // 效果key的中文映射
 const EFFECT_NAMES = {
@@ -124,6 +125,65 @@ export function showEventModal(event) {
             const desc = rollBlueprint();
             if (desc) applied.push(desc);
           }
+        } else if (key === 'aiBuilding') {
+          // AI 生成全新建筑并作为蓝图发放；失败时 fallback 到已有建筑图纸
+          generateProposal('building_proposal').then((res) => {
+            if (res.ok && res.proposal) {
+              const accepted = acceptProposal(res.proposal.id);
+              const name = accepted.ok ? accepted.item.content.name : '未知设施';
+              gameState.addNotification({
+                title: '🏗️ 发现全新建筑蓝图',
+                text: `事件中发现了前所未有的设施设计方案【${name}】，已加入建造面板！`,
+                type: 'success',
+                icon: 'sparkles',
+                duration: 6000,
+              });
+            } else {
+              // AI 生成失败，回退到已有建筑图纸
+              const desc = rollBlueprint();
+              if (desc) {
+                gameState.addNotification({
+                  title: '📜 获得建筑图纸',
+                  text: desc,
+                  type: 'success',
+                  icon: 'scroll',
+                });
+              }
+            }
+          }).catch(() => {
+            const desc = rollBlueprint();
+            if (desc) {
+              gameState.addNotification({
+                title: '📜 获得建筑图纸',
+                text: desc,
+                type: 'success',
+                icon: 'scroll',
+              });
+            }
+          });
+          applied.push('蓝图研究中…');
+        } else if (key === 'aiContent') {
+          // AI 生成动态内容（新种族/新科技/新组合等），成功后通知玩家前往 AI 工坊确认
+          const contentLabels = {
+            species_proposal: '新外星种族',
+            tech_proposal: '新科技',
+            combo_proposal: '新组合',
+            building_proposal: '新建筑',
+          };
+          const contentType = val;
+          generateProposal(contentType).then((res) => {
+            if (res.ok && res.proposal) {
+              const name = res.proposal.content?.name || contentLabels[contentType] || '未知内容';
+              gameState.addNotification({
+                title: `✨ 发现${contentLabels[contentType] || 'AI 内容'}`,
+                text: `事件触发了【${name}】提案，请前往 AI 工坊确认！`,
+                type: 'success',
+                icon: 'sparkles',
+                duration: 6000,
+              });
+            }
+          }).catch(() => {});
+          applied.push(`${contentLabels[contentType] || 'AI 内容'}研究中…`);
         } else if (key in gameState.state.resources) {
           gameState.addResource(key, val);
           applied.push(`${EFFECT_NAMES[key] || key} ${val > 0 ? '+' : ''}${val}`);
